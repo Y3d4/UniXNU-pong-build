@@ -1,6 +1,6 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -222,2 +222,19 @@
+@@ -222,2 +222,50 @@
  LEXT(_start)
 +#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
 +	// Persistent marker at the first XNU instruction, before page-table setup.
@@ -18,5 +18,36 @@
 +	movk	w10, #0x3155, lsl #16
 +	str	w10, [x9, #16]
 +	dsb	sy
++	// Video is the Darwin 22 boot_args Video[6] at x0 + 0x28.
++	// Draw a magenta 160x8 marker at the bottom-left using the GOP stride.
++	ldr	x9, [x0, #0x28]
++	cbz	x9, 2f
++	ldr	x10, [x0, #0x38]
++	cmp	x10, #640
++	b.lo	2f
++	ldr	x11, [x0, #0x48]
++	cmp	x11, #8
++	b.lo	2f
++	ldr	x14, [x0, #0x40]
++	cmp	x14, #160
++	b.lo	2f
++	sub	x11, x11, #8
++	mul	x11, x11, x10
++	add	x15, x9, x11
++	movz	w12, #0x00ff
++	movk	w12, #0xffff, lsl #16
++	mov	x13, #8
++1:
++	mov	x9, x15
++	mov	x14, #160
++3:
++	str	w12, [x9], #4
++	subs	x14, x14, #1
++	b.ne	3b
++	add	x15, x15, x10
++	subs	x13, x13, #1
++	b.ne	1b
++	dsb	sy
++2:
 +#endif
  	b	EXT(start_first_cpu)
