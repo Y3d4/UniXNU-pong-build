@@ -74,7 +74,7 @@ jobs:
           df -h "$GITHUB_WORKSPACE"
 
       - name: Install build tools
-        run: brew install llvm lld mtools dtc unifdef
+        run: brew install llvm lld mtools dtc unifdef ripgrep
 
       - name: Check required firmware secret
         env:

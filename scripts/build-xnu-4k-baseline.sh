@@ -201,26 +201,31 @@ PY
 if [ ! -f "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ] || \
    [ .cache/xnu-work/pexpert/pexpert/arm64/board_config.h -nt "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ] || \
    [ .cache/xnu-work/pexpert/pexpert/arm64/PONG.h -nt "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ]; then
-  # XNU's Makefiles query Darwin-only sysctl names and sw_vers during header
-  # generation. Pass Linux host equivalents as make variables so this does not
-  # depend on macOS utilities being installed under /usr/sbin.
-  HOST_OS_VERSION=${UNIXNU_HOST_OS_VERSION:-26.0.0}
-  HOST_PHYSICAL_CPU=${UNIXNU_HOST_PHYSICAL_CPU:-$(nproc --all)}
-  HOST_LOGICAL_CPU=${UNIXNU_HOST_LOGICAL_CPU:-$(nproc --all)}
-  HOST_MEMORY_SIZE=$(awk '/^MemTotal:/ {printf "%.0f\n", $2 * 1024; exit}' /proc/meminfo)
-  HOST_MEMORY_SIZE=${UNIXNU_HOST_MEMORY_SIZE:-$HOST_MEMORY_SIZE}
-  TOOLCHAIN_ROOT=${UNIXNU_TOOLCHAIN:-/opt/unixnu-linux}
-  HOST_CC=${UNIXNU_HOST_CC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/xnu-host-cc}
-  MIG_CC=${UNIXNU_MIGCC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/clang}
-  MIG_COM=${UNIXNU_MIGCOM:-$TOOLCHAIN_ROOT/CommandLineTools/usr/libexec/migcom}
-  make -C .cache/xnu-work installhdrs SDKROOT=macosx ARCH_CONFIGS=ARM64 \
-    MACHINE_CONFIGS=PONG KERNEL_CONFIGS=DEVELOPMENT \
-    RC_DARWIN_KERNEL_VERSION="$XNU_DARWIN" RC_ProjectSourceVersion="$XNU_VERSION" \
-    HOST_OS_VERSION="$HOST_OS_VERSION" SYSCTL_HW_PHYSICALCPU="$HOST_PHYSICAL_CPU" \
-    SYSCTL_HW_LOGICALCPU="$HOST_LOGICAL_CPU" MEMORY_SIZE="$HOST_MEMORY_SIZE" \
-    HOST_CC="$HOST_CC" MIGCC="$MIG_CC" MIGCOM="$MIG_COM" \
-    MAKEJOBS=-j"${JOBS:-4}" OBJROOT="$ROOT/build/xnu/obj" \
+  INSTALLHDRS_ARGS=(
+    -C .cache/xnu-work installhdrs SDKROOT=macosx ARCH_CONFIGS=ARM64
+    MACHINE_CONFIGS=PONG KERNEL_CONFIGS=DEVELOPMENT
+    RC_DARWIN_KERNEL_VERSION="$XNU_DARWIN" RC_ProjectSourceVersion="$XNU_VERSION"
+    MAKEJOBS=-j"${JOBS:-4}" OBJROOT="$ROOT/build/xnu/obj"
     SYMROOT="$ROOT/build/xnu/sym" DSTROOT="$KERNEL_SDKROOT"
+  )
+  if [ "$(uname -s)" = Linux ]; then
+    # Linux lacks Darwin's sysctl, sw_vers, and XNU host tool defaults.
+    HOST_OS_VERSION=${UNIXNU_HOST_OS_VERSION:-26.0.0}
+    HOST_PHYSICAL_CPU=${UNIXNU_HOST_PHYSICAL_CPU:-$(nproc --all)}
+    HOST_LOGICAL_CPU=${UNIXNU_HOST_LOGICAL_CPU:-$(nproc --all)}
+    HOST_MEMORY_SIZE=$(awk '/^MemTotal:/ {printf "%.0f\n", $2 * 1024; exit}' /proc/meminfo)
+    HOST_MEMORY_SIZE=${UNIXNU_HOST_MEMORY_SIZE:-$HOST_MEMORY_SIZE}
+    TOOLCHAIN_ROOT=${UNIXNU_TOOLCHAIN:-/opt/unixnu-linux}
+    HOST_CC=${UNIXNU_HOST_CC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/xnu-host-cc}
+    MIG_CC=${UNIXNU_MIGCC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/clang}
+    MIG_COM=${UNIXNU_MIGCOM:-$TOOLCHAIN_ROOT/CommandLineTools/usr/libexec/migcom}
+    INSTALLHDRS_ARGS+=(
+      HOST_OS_VERSION="$HOST_OS_VERSION" SYSCTL_HW_PHYSICALCPU="$HOST_PHYSICAL_CPU"
+      SYSCTL_HW_LOGICALCPU="$HOST_LOGICAL_CPU" MEMORY_SIZE="$HOST_MEMORY_SIZE"
+      HOST_CC="$HOST_CC" MIGCC="$MIG_CC" MIGCOM="$MIG_COM"
+    )
+  fi
+  make "${INSTALLHDRS_ARGS[@]}"
   touch "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers"
 fi
 if [ "${XNU_ARM_DT_PLATFORM:-0}" = 1 ] && [ -n "${PONG_NATIVE_DRIVER_SOURCE:-}" ]; then
