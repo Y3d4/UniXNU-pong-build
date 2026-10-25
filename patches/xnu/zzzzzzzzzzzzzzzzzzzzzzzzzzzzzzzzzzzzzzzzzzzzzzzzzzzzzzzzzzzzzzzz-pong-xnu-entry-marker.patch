@@ -77,18 +77,37 @@
 +	str	w10, [x9, #16]
 +	dsb	sy
  	/* Ensure TTEs are visible */
-@@ -806,6 +806,14 @@
- 	mov	x0, x20
- 	mov	lr, x21
- #endif
+@@ -854,3 +863,18 @@
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
 +#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
-+	// Return marker: common_start completed and arm_init() is next.
++	// MMU is enabled. Use the already-installed KVA mapping for the PA.
 +	movz	x9, #0x8540, lsl #16
-+	movz	w10, #0x4552
-+	movk	w10, #0x3154, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4d4d
++	movk	w10, #0x3155, lsl #16
 +	str	w10, [x9, #16]
++	dc	cvac, x9
 +	dsb	sy
 +#endif
  
+ #if !VMAPPLE
+@@ -923,2 +981,17 @@
  	// Return to arm_init()
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	// Return marker: common_start completed and arm_init() is next.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4552
++	movk	w10, #0x3154, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++#endif
  	ret
