@@ -136,6 +136,11 @@ for relative, (digest, atime, mtime) in json.loads(Path('.cache/xnu-patch-times.
     if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
         os.utime(path, ns=(atime, mtime))
 PY_PATCH_TIMES
+if [ "$(uname -s)" = Linux ]; then
+  # Install the Linux stand-in for Apple's TargetConditionals.h before any
+  # SDK consumer, such as the firehose archive, is compiled.
+  python3 scripts/linux/prepare-xnu.py source
+fi
 export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl
 python3 scripts/prepare-xnu-source.py
 BOOT_PROGRESS=${XNU_BOOT_PROGRESS:-0}
@@ -196,9 +201,24 @@ PY
 if [ ! -f "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ] || \
    [ .cache/xnu-work/pexpert/pexpert/arm64/board_config.h -nt "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ] || \
    [ .cache/xnu-work/pexpert/pexpert/arm64/PONG.h -nt "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ]; then
+  # XNU's Makefiles query Darwin-only sysctl names and sw_vers during header
+  # generation. Pass Linux host equivalents as make variables so this does not
+  # depend on macOS utilities being installed under /usr/sbin.
+  HOST_OS_VERSION=${UNIXNU_HOST_OS_VERSION:-26.0.0}
+  HOST_PHYSICAL_CPU=${UNIXNU_HOST_PHYSICAL_CPU:-$(nproc --all)}
+  HOST_LOGICAL_CPU=${UNIXNU_HOST_LOGICAL_CPU:-$(nproc --all)}
+  HOST_MEMORY_SIZE=$(awk '/^MemTotal:/ {printf "%.0f\n", $2 * 1024; exit}' /proc/meminfo)
+  HOST_MEMORY_SIZE=${UNIXNU_HOST_MEMORY_SIZE:-$HOST_MEMORY_SIZE}
+  TOOLCHAIN_ROOT=${UNIXNU_TOOLCHAIN:-/opt/unixnu-linux}
+  HOST_CC=${UNIXNU_HOST_CC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/xnu-host-cc}
+  MIG_CC=${UNIXNU_MIGCC:-$TOOLCHAIN_ROOT/CommandLineTools/usr/bin/clang}
+  MIG_COM=${UNIXNU_MIGCOM:-$TOOLCHAIN_ROOT/CommandLineTools/usr/libexec/migcom}
   make -C .cache/xnu-work installhdrs SDKROOT=macosx ARCH_CONFIGS=ARM64 \
     MACHINE_CONFIGS=PONG KERNEL_CONFIGS=DEVELOPMENT \
     RC_DARWIN_KERNEL_VERSION="$XNU_DARWIN" RC_ProjectSourceVersion="$XNU_VERSION" \
+    HOST_OS_VERSION="$HOST_OS_VERSION" SYSCTL_HW_PHYSICALCPU="$HOST_PHYSICAL_CPU" \
+    SYSCTL_HW_LOGICALCPU="$HOST_LOGICAL_CPU" MEMORY_SIZE="$HOST_MEMORY_SIZE" \
+    HOST_CC="$HOST_CC" MIGCC="$MIG_CC" MIGCOM="$MIG_COM" \
     MAKEJOBS=-j"${JOBS:-4}" OBJROOT="$ROOT/build/xnu/obj" \
     SYMROOT="$ROOT/build/xnu/sym" DSTROOT="$KERNEL_SDKROOT"
   touch "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers"
@@ -221,6 +241,9 @@ if [ "${XNU_NATIVE_UFS:-0}" = 1 ] && [ -n "${PONG_NATIVE_DRIVER_SOURCE:-}" ]; th
 fi
 if [ ! -f "$KERNEL_SDKROOT/usr/local/lib/kernel/libfirehose_kernel.a" ]; then
   bash scripts/build-firehose.sh
+fi
+if [ "$(uname -s)" = Linux ]; then
+  python3 scripts/linux/prepare-xnu.py libs
 fi
 # The baseline builds the kernel; `all` also checks the Apple kext export ABI.
 EXTRA_MAKE_ARGS=()
@@ -908,8 +931,11 @@ if [ "$PONG_ADRENO_PLATFORM" = 1 ]; then
   # IOAcceleratorES initializer runs only after20G81 IOGPUFamily loads.
   # Keep foreign A740/Redwood hardware owners disabled independently.
   PONG_DRIVER_SOURCE=${PONG_NATIVE_DRIVER_SOURCE:-$ROOT}
-  python3 "$PONG_DRIVER_SOURCE/scripts/build-pong-adreno-platform.py" \
-    --output-dir "$ROOT/build/pong-adreno"
+  PONG_ADRENO_ARGS=(--output-dir "$ROOT/build/pong-adreno" --tree "$ROOT")
+  if [ -n "${PONG_ADRENO_FIRMWARE_DIR:-}" ]; then
+    PONG_ADRENO_ARGS+=(--firmware-dir "$PONG_ADRENO_FIRMWARE_DIR")
+  fi
+  python3 "$PONG_DRIVER_SOURCE/scripts/build-pong-adreno-platform.py" "${PONG_ADRENO_ARGS[@]}"
 fi
 if [ "$ARM_DT_PLATFORM" = 1 ] && [ "${XNU_SOURCE_CORECRYPTO14:-0}" != 1 ]; then
   ARM_DT_ARCHIVE=$ROOT/build/armdt-platform/libArmDTPlatform.a

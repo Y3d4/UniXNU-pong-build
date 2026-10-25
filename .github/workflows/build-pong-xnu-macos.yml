@@ -1,0 +1,192 @@
+name: Build Pong XNU on macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pong-xnu-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
+  HOMEBREW_NO_ENV_HINTS: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  kernel:
+    runs-on: macos-26
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out UniXNU core
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: unixnu
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check out Pong device repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          path: device
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            developer=/Applications/Xcode_26.6.app
+          elif [ -d /Applications/Xcode.app ]; then
+            developer=/Applications/Xcode.app
+          else
+            developer=$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort | tail -n 1)
+          fi
+          test -n "$developer"
+          echo "DEVELOPER_DIR=$developer/Contents/Developer" >> "$GITHUB_ENV"
+          echo "Using $developer"
+
+      - name: Check runner
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphoneos --find mig
+          sw_vers
+          uname -m
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Install build tools
+        run: brew install llvm lld mtools dtc unifdef
+
+      - name: Check required firmware secret
+        env:
+          FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
+          FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
+        run: |
+          set -euo pipefail
+          test -n "$FIRMWARE_URL" || { echo 'Missing secret PONG_FIRMWARE_URL' >&2; exit 1; }
+          test -n "$FIRMWARE_SHA256" || { echo 'Missing secret PONG_FIRMWARE_SHA256' >&2; exit 1; }
+          echo 'Pong GPU firmware secrets are present.'
+
+      - name: Select Pong configuration
+        working-directory: unixnu
+        run: ./unixnu defconfig pong_defconfig -D "$GITHUB_WORKSPACE/device"
+
+      - name: Fetch pinned source repositories
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./unixnu fetch
+          ./unixnu tree
+
+      - name: Fetch iOS 16.6.1 inputs
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if python3 "$GITHUB_WORKSPACE/device/scripts/fetch-ios16-assets.py"; then
+              exit 0
+            fi
+            sleep 20
+          done
+          exit 1
+
+      - name: Download Pong GPU firmware
+        env:
+          FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
+          FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
+        run: |
+          set -euo pipefail
+          echo '::add-mask::'"$FIRMWARE_URL"
+          archive="$RUNNER_TEMP/pong-gpu-firmware.tar.gz"
+          curl -fL --retry 3 --retry-all-errors "$FIRMWARE_URL" | base64 -D > "$archive"
+          printf '%s  %s\n' "$FIRMWARE_SHA256" "$archive" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/pong-firmware"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/pong-firmware"
+          gpu="$RUNNER_TEMP/pong-firmware/gpu"
+          test -f "$gpu/gmu_gen70000.bin"
+          test -f "$gpu/a730_sqe.fw"
+          test -f "$gpu/a730_zap.mdt"
+          test -f "$gpu/a730_zap.b01"
+          test -f "$gpu/a730_zap.b02"
+
+      - name: Build Pong kernel from a fresh macOS tree
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PONG_ADRENO_FIRMWARE_DIR: ${{ runner.temp }}/pong-firmware/gpu
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifact/kernel"
+          python3 "$GITHUB_WORKSPACE/device/scripts/build-ios16-pong-macos.py" \
+            --baseline-tree "$GITHUB_WORKSPACE/unixnu/out/pong/tree" \
+            --tree "$RUNNER_TEMP/pong-native/tree" \
+            --developer-dir "$DEVELOPER_DIR" \
+            --jobs 4 \
+            --artifact-dir "$GITHUB_WORKSPACE/artifact/kernel" \
+            --skip-image-verification
+
+      - name: Stage reports and hashes
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifact/reports"
+          for path in \
+            "$GITHUB_WORKSPACE/device/mac-build/native-ufs" \
+            "$GITHUB_WORKSPACE/device/mac-build/armdt-platform" \
+            "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong"; do
+            if [ -d "$path" ]; then
+              name=$(basename "$path")
+              cp -R "$path" "$GITHUB_WORKSPACE/artifact/reports/$name"
+            fi
+          done
+          find "$GITHUB_WORKSPACE/artifact" -type f -print0 | xargs -0 shasum -a 256 \
+            > "$GITHUB_WORKSPACE/artifact/SHA256SUMS" || true
+
+      - name: Upload Pong kernel artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pong-xnu-macos-${{ github.run_number }}
+          path: artifact/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pong-xnu-macos-logs-${{ github.run_number }}
+          path: |
+            unixnu/out/pong/logs/*.log
+            ${{ runner.temp }}/pong-native/*.log
+            ${{ runner.temp }}/pong-native/tree/build/**/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Cleanup proprietary inputs
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/pong-firmware" "$RUNNER_TEMP/pong-gpu-firmware.tar.gz"
