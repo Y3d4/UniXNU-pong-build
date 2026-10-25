@@ -56,6 +56,12 @@ def der(data, at):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', required=True, type=Path)
+    parser.add_argument('--native-artifact', type=Path,
+                        help='completed Pong kernel artifact; defaults to mac-build/ios16-xnu-pong')
+    parser.add_argument('--kernelcache', type=Path,
+                        help='decompressed-input source kernelcache; defaults to apple/20G81/kernelcache.release.ipad7')
+    parser.add_argument('--skip-bootimg', action='store_true',
+                        help='stop after emitting the candidate and prelink plan; useful for ABI audits')
     parser.add_argument('--module', action='append', default=[], help='Additional genuine 20G81 root module; corecrypto is always included')
     parser.add_argument('--kernel-arg', action='append', default=[])
     parser.add_argument('--window-size', type=lambda value: int(value, 0), default=0x10000000,
@@ -81,12 +87,12 @@ def main():
     out = args.output_dir.resolve()
     if out.exists():
         parser.error('Preserving existing output; choose a new directory')
-    artifact = DEVICE / 'mac-build/ios16-xnu-pong'
+    artifact = (args.native_artifact or DEVICE / 'mac-build/ios16-xnu-pong').resolve()
     report = json.loads((artifact / 'PONG_BUILD_RESULT.json').read_text())
     native = (artifact / 'mach.development.pong').read_bytes()
     if not report['build_complete'] or digest(native) != report['kernel']['sha256']:
         raise ValueError('Native kernel does not match completed build')
-    raw = (ROOT / 'apple/20G81/kernelcache.release.ipad7').read_bytes()
+    raw = (args.kernelcache or ROOT / 'apple/20G81/kernelcache.release.ipad7').resolve().read_bytes()
     pin = 'ddc2230e4ea9aced34c84b7ef78dc7e7564235b17a2640c718a78e0e3ca092c2'
     if digest(raw) != pin:
         raise ValueError('Input Apple kernelcache differs from board pin')
@@ -217,21 +223,22 @@ def main():
         shutil.copyfile(ROOT / 'evidence/pong-early-trace-stages.json', out / 'pong-early-trace-stages.json')
     # The qualified loader scans at most 128 MiB. This candidate carries only
     # corecrypto, with zero-filled coalesced gaps and no root filesystem.
-    fat_mib = 64 if len(candidate) + 0x400000 < 64 * 1024 * 1024 else 96
-    subprocess.run([sys.executable, str(DEVICE / 'scripts/build-native-bootimg-local.py'),
-        '--kernel', str(kernel), '--result', str(out / 'PONG_BUILD_RESULT.json'),
-        '--fat-mib', str(fat_mib), '--output-dir', str(out),
-        '--window-size', hex(args.window_size),
-        *(['--ufs-probe'] if args.ufs_probe else []),
-        *(['--root-match-volume-uuid', args.root_match_volume_uuid]
-          if args.root_match_volume_uuid else []),
-        *(['--development-debug'] if args.development_debug else []),
-        *(['--amfi-only-platform-code'] if args.amfi_only_platform_code else []),
-        *(['--system-volume-auth-blob', str(args.system_volume_auth_blob)]
-          if args.system_volume_auth_blob else []),
-        *(['--data-ramdisk', str(args.data_ramdisk.resolve()), '--packed-data-ramdisk']
-          if args.data_ramdisk else []),
-        *[f'--kernel-arg={value}' for value in args.kernel_arg]], check=True)
+    if not args.skip_bootimg:
+        fat_mib = 64 if len(candidate) + 0x400000 < 64 * 1024 * 1024 else 96
+        subprocess.run([sys.executable, str(DEVICE / 'scripts/build-native-bootimg-local.py'),
+            '--kernel', str(kernel), '--result', str(out / 'PONG_BUILD_RESULT.json'),
+            '--fat-mib', str(fat_mib), '--output-dir', str(out),
+            '--window-size', hex(args.window_size),
+            *(['--ufs-probe'] if args.ufs_probe else []),
+            *(['--root-match-volume-uuid', args.root_match_volume_uuid]
+              if args.root_match_volume_uuid else []),
+            *(['--development-debug'] if args.development_debug else []),
+            *(['--amfi-only-platform-code'] if args.amfi_only_platform_code else []),
+            *(['--system-volume-auth-blob', str(args.system_volume_auth_blob)]
+              if args.system_volume_auth_blob else []),
+            *(['--data-ramdisk', str(args.data_ramdisk.resolve()), '--packed-data-ramdisk']
+              if args.data_ramdisk else []),
+            *[f'--kernel-arg={value}' for value in args.kernel_arg]], check=True)
     print('Prelink SHA-256:', digest(candidate))
     print('Owned-window virtual span:', hex(extent))
 

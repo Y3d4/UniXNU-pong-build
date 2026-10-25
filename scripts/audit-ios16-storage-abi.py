@@ -3,27 +3,40 @@
 The public reference object annotates the ABI and is never linked or executed.
 """
 import hashlib, json, os, re, shutil, struct, subprocess, sys
+import argparse
 from pathlib import Path
 DEVICE = Path(__file__).resolve().parents[1]
 ROOT = DEVICE.parent
 sys.path.insert(0, str(DEVICE / 'kits/NativePrelink'))
 import native_prelink as np
-source = DEVICE / 'reference/IOStorageFamily'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--source', type=Path, required=True,
+                    help='Darwin 22 IOStorageFamily checkout at the audited revision')
+parser.add_argument('--candidate', type=Path, required=True,
+                    help='corecrypto candidate emitted from the bootstrap Pong kernel')
+parser.add_argument('--framework', type=Path, required=True,
+                    help='Kernel.framework fakeroot produced by the bootstrap build')
+parser.add_argument('--developer-dir', type=Path, default=None)
+parser.add_argument('--output-dir', type=Path, default=DEVICE / 'mac-build/storage-abi')
+args = parser.parse_args()
+source = args.source.resolve()
 revision = subprocess.check_output(['git', '-C', source, 'rev-parse', 'HEAD'],text=True).strip()
 if revision != '609cbbdf9fa8fd5eae973d9135c7d44b47e6502e':
     raise SystemExit('Unexpected Darwin 22 storage reference source')
-out = DEVICE / 'mac-build/storage-abi'
+out = args.output_dir.resolve()
 out.mkdir(parents=True, exist_ok=True)
 headers = out / 'include/IOKit/storage'
 headers.mkdir(parents=True, exist_ok=True)
 for path in source.glob('*.h'):
     shutil.copyfile(path, headers / path.name)
 obj_path = out / 'reference.o'
-env = dict(os.environ, DEVELOPER_DIR='/Volumes/PongDev/Applications/Xcode.app/Contents/Developer')
+env = dict(os.environ)
+if args.developer_dir:
+    env['DEVELOPER_DIR'] = str(args.developer_dir.resolve())
 sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True, env=env).strip()
 macsdk = Path(subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], text=True, env=env).strip())
 shutil.copyfile(macsdk / 'usr/include/TargetConditionals.h', out / 'include/TargetConditionals.h')
-framework = Path('/Volumes/PongDev/build/Pong-iOS16-native/tree/.cache/fakeroot/System/Library/Frameworks/Kernel.framework/Versions/A')
+framework = args.framework.resolve()
 command = ['xcrun', '--sdk', 'iphoneos', 'clang++', '-target', 'arm64-apple-ios16.0',
     '-isysroot', sdk, '-mkernel', '-ffreestanding', '-fno-builtin', '-fno-exceptions',
     '-fno-rtti', '-std=gnu++17', '-fblocks', '-O2', '-g',
@@ -70,7 +83,7 @@ for at in range(vtable + 16, end, 8):
         break
     methods.append(relocations[at])
 require(len(methods) == 190 and methods.count('___cxa_pure_virtual') == 14, 'Public iOS class dispatch shape changed')
-kernel_path = ROOT / 'build/native-xnu-probe-continue-policy/kernel-corecrypto.macho'
+kernel_path = args.candidate.resolve()
 kernel = kernel_path.read_bytes()
 plan = json.loads((kernel_path.parent / 'prelink.json').read_text())
 require(hashlib.sha256(kernel).hexdigest() == plan['candidate_sha256'] and

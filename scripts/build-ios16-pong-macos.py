@@ -79,6 +79,8 @@ def main():
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--artifact-dir', type=Path,
                         help='export this development build separately from the known bootable kernel')
+    parser.add_argument('--bootstrap-storage-abi', action='store_true',
+                        help='build a temporary kernel without NativeUfs or owner Data mounts for ABI qualification')
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--skip-image-verification', action='store_true',
                         help='build without hashing or auditing the resulting kernel images')
@@ -152,6 +154,14 @@ def main():
         if line.startswith('CONFIG_XNU_'):
             key, value = line.removeprefix('CONFIG_').split('=', 1)
             env[key] = {'y': '1', 'n': '0'}.get(value, value.strip('"'))
+    if args.bootstrap_storage_abi:
+        # The ABI candidate must come from a kernel that does not itself link
+        # NativeUfs.  Otherwise the audit would depend on the bindings it is
+        # supposed to derive.  Disable the coupled owner mount policy too.
+        for key in ('XNU_NATIVE_UFS', 'XNU_OWNER_DATA_UFS', 'XNU_OWNER_DATA_MOUNT',
+                    'XNU_OWNER_CACHE_MOUNT', 'XNU_OWNER_CACHE_STARTUP',
+                    'XNU_PONG_APFS_DEBUG'):
+            env[key] = '0'
     # Pong's complete SM8475 GMU/CP/BO/IRQ/Metal provider is linked through
     # XNU_PONG_ADRENO_PLATFORM. Disable the generic A740/Redwood board owners
     # to avoid duplicate power/SMMU ownership; this does not disable Pong GPU.

@@ -144,6 +144,59 @@ jobs:
           test -f "$gpu/a730_zap.b01"
           test -f "$gpu/a730_zap.b02"
 
+      - name: Fetch Darwin 22 storage reference
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/IOStorageFamily-ios16"
+          git init -q "$source"
+          git -C "$source" remote add origin https://github.com/apple-oss-distributions/IOStorageFamily.git
+          git -C "$source" fetch -q --depth 1 origin 609cbbdf9fa8fd5eae973d9135c7d44b47e6502e
+          git -C "$source" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$source" rev-parse HEAD)" = 609cbbdf9fa8fd5eae973d9135c7d44b47e6502e
+
+      - name: Build storage ABI bootstrap kernel
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PONG_ADRENO_FIRMWARE_DIR: ${{ runner.temp }}/pong-firmware/gpu
+        run: |
+          set -euo pipefail
+          rm -rf "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong-bootstrap"
+          python3 "$GITHUB_WORKSPACE/device/scripts/build-ios16-pong-macos.py" \
+            --baseline-tree "$GITHUB_WORKSPACE/unixnu/out/pong/tree" \
+            --tree "$RUNNER_TEMP/pong-bootstrap/tree" \
+            --developer-dir "$DEVELOPER_DIR" \
+            --jobs 4 \
+            --artifact-dir "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong-bootstrap" \
+            --bootstrap-storage-abi
+
+      - name: Emit corecrypto ABI candidate
+        working-directory: unixnu
+        run: |
+          set -euo pipefail
+          rm -rf "$GITHUB_WORKSPACE/build/native-xnu-probe-continue-policy"
+          python3 "$GITHUB_WORKSPACE/device/scripts/build-ios16-corecrypto-candidate.py" \
+            --native-artifact "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong-bootstrap" \
+            --kernelcache "$GITHUB_WORKSPACE/unixnu/out/ipsw/20G81/kernelcache.release.ipad7" \
+            --output-dir "$GITHUB_WORKSPACE/build/native-xnu-probe-continue-policy" \
+            --module com.apple.iokit.IOStorageFamily \
+            --skip-bootimg
+
+      - name: Audit iOS 16 storage ABI
+        working-directory: unixnu
+        run: |
+          set -euo pipefail
+          rm -rf "$GITHUB_WORKSPACE/device/mac-build/storage-abi"
+          python3 "$GITHUB_WORKSPACE/device/scripts/audit-ios16-storage-abi.py" \
+            --source "$RUNNER_TEMP/IOStorageFamily-ios16" \
+            --candidate "$GITHUB_WORKSPACE/build/native-xnu-probe-continue-policy/kernel-corecrypto.macho" \
+            --framework "$RUNNER_TEMP/pong-bootstrap/tree/.cache/fakeroot/System/Library/Frameworks/Kernel.framework/Versions/A" \
+            --developer-dir "$DEVELOPER_DIR" \
+            --output-dir "$GITHUB_WORKSPACE/device/mac-build/storage-abi"
+          rm -rf "$GITHUB_WORKSPACE/unixnu/out/pong/tree/build/storage-abi"
+          cp -R "$GITHUB_WORKSPACE/device/mac-build/storage-abi" \
+            "$GITHUB_WORKSPACE/unixnu/out/pong/tree/build/storage-abi"
+
       - name: Build Pong kernel from a fresh macOS tree
         working-directory: unixnu
         env:
@@ -166,6 +219,8 @@ jobs:
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/artifact/reports"
           for path in \
+            "$GITHUB_WORKSPACE/device/mac-build/storage-abi" \
+            "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong-bootstrap" \
             "$GITHUB_WORKSPACE/device/mac-build/native-ufs" \
             "$GITHUB_WORKSPACE/device/mac-build/armdt-platform" \
             "$GITHUB_WORKSPACE/device/mac-build/ios16-xnu-pong"; do
