@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_v8_trace:
+        description: Build the v8 diagnostic kernel with early XNU trace markers enabled
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -83,7 +88,7 @@ jobs:
         run: brew install llvm lld mtools dtc unifdef ripgrep
 
       - name: Check required firmware secret
-        if: ${{ inputs.diagnostic_v8 != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -133,7 +138,7 @@ jobs:
           exit 1
 
       - name: Download Pong GPU firmware
-        if: ${{ inputs.diagnostic_v8 != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -179,7 +184,7 @@ jobs:
             --bootstrap-storage-abi
 
       - name: Build source CoreCrypto archives for v8
-        if: ${{ inputs.diagnostic_v8 == true }}
+        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true }}
         working-directory: ${{ runner.temp }}/pong-bootstrap/tree
         run: |
           set -euo pipefail
@@ -195,7 +200,7 @@ jobs:
           ls -lh build/corecrypto-2023/libcorecrypto_kernel_noasm*.a
 
       - name: Emit corecrypto ABI candidate
-        if: ${{ inputs.diagnostic_v8 != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -208,7 +213,7 @@ jobs:
             --skip-bootimg
 
       - name: Audit iOS 16 storage ABI
-        if: ${{ inputs.diagnostic_v8 != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -238,7 +243,7 @@ jobs:
             --jobs 4
             --artifact-dir "$GITHUB_WORKSPACE/artifact/kernel"
           )
-          if [[ "${{ inputs.diagnostic_v8 }}" == "true" ]]; then
+          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" ]]; then
             python3 - <<'PY'
           import os
           from pathlib import Path
@@ -250,6 +255,8 @@ jobs:
               'CONFIG_XNU_PONG_ADRENO_PLATFORM=y': 'CONFIG_XNU_PONG_ADRENO_PLATFORM=n',
               'CONFIG_XNU_SOURCE_CORECRYPTO14=n': 'CONFIG_XNU_SOURCE_CORECRYPTO14=y',
           }
+          if "${{ inputs.diagnostic_v8_trace }}" == "true":
+              changes['CONFIG_XNU_PONG_EARLY_TRACE=n'] = 'CONFIG_XNU_PONG_EARLY_TRACE=y'
           for old, new in changes.items():
               if text.count(old) != 1:
                   raise SystemExit(f"Expected exactly one {old!r} in {path}")
