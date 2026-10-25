@@ -65,4 +65,5 @@ ASM_FUNC(DarwinEnter)
   isb
   br x1
 
-ASM_FUNC(DarwinEnterEnd)
+.global ASM_PFX(DarwinEnterEnd)
+ASM_PFX(DarwinEnterEnd):
