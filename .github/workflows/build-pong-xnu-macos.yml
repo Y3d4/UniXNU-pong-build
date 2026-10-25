@@ -248,6 +248,8 @@ jobs:
           name: pong-xnu-macos-logs-${{ github.run_number }}
           path: |
             unixnu/out/pong/logs/*.log
+            ${{ runner.temp }}/pong-bootstrap/*.log
+            ${{ runner.temp }}/pong-bootstrap/tree/build/**/*.log
             ${{ runner.temp }}/pong-native/*.log
             ${{ runner.temp }}/pong-native/tree/build/**/*.log
           if-no-files-found: warn

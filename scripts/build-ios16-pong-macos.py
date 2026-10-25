@@ -196,6 +196,10 @@ def main():
     report['log'] = str(log)
     result.write_text(json.dumps(report, indent=2) + '\n')
     if process.returncode:
+        try:
+            print(log.read_text(errors='replace')[-12000:], file=sys.stderr)
+        except OSError:
+            pass
         raise SystemExit(f'Build failed; retained full log: {log}')
     kernel = tree / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong'
     unstripped = kernel.with_name(kernel.name + '.unstripped')
