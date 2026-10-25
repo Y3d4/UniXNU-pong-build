@@ -107,8 +107,14 @@ jobs:
         working-directory: device
         run: |
           set -euo pipefail
-          rm -rf "$GITHUB_WORKSPACE/device/mac-build/darwinboot22"
-          rm -rf "$RUNNER_TEMP/pong-darwinboot22"
+          rm -rf "$GITHUB_WORKSPACE/device/mac-build/darwinboot22" "$RUNNER_TEMP/pong-darwinboot22"
+          mkdir -p "$RUNNER_TEMP/pong-darwinboot22/Conf"
+          for name in target tools_def build_rule; do
+            cp "$GITHUB_WORKSPACE/basecore/BaseTools/Conf/${name}.template" \
+              "$RUNNER_TEMP/pong-darwinboot22/Conf/${name}.txt"
+          done
+          sed -i '' 's@/OPT:REF@/OPT:NOREF@g' \
+            "$RUNNER_TEMP/pong-darwinboot22/Conf/tools_def.txt"
           python3 scripts/build-darwinboot22-macos.py \
             --edk2 "$GITHUB_WORKSPACE/basecore" \
             --package "$GITHUB_WORKSPACE/unixnu/package" \
