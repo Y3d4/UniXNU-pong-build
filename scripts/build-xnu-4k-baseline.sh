@@ -100,7 +100,10 @@ for PATCH in "${PATCHES[@]}"; do
     [ "$PATCH_NAME" = "zzzzzz-pong-writable-data.patch" ] ||
     [[ "$PATCH_NAME" == *pong-ufs-data.patch ]] ||
     [[ "$PATCH_NAME" == *pong-systemos-shared-region.patch ]] ||
-    [[ "$PATCH_NAME" == *pong-upstream-oct22.patch ]];
+    [[ "$PATCH_NAME" == *pong-upstream-oct22.patch ]] ||
+    [[ "$PATCH_NAME" == *pong-hackios-userland-abi.patch ]] ||
+    [[ "$PATCH_NAME" == *pong-development-uaccess.patch ]] ||
+    [[ "$PATCH_NAME" == *owner-z-air-init.patch ]];
   }; then
     echo "Skipping $PATCH_NAME: storage ABI bootstrap has no owner Data path"
     continue
