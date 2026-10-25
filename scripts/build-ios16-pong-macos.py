@@ -162,6 +162,7 @@ def main():
                     'XNU_OWNER_CACHE_MOUNT', 'XNU_OWNER_CACHE_STARTUP',
                     'XNU_PONG_APFS_DEBUG'):
             env[key] = '0'
+        env['XNU_STORAGE_ABI_BOOTSTRAP'] = '1'
     # Pong's complete SM8475 GMU/CP/BO/IRQ/Metal provider is linked through
     # XNU_PONG_ADRENO_PLATFORM. Disable the generic A740/Redwood board owners
     # to avoid duplicate power/SMMU ownership; this does not disable Pong GPU.

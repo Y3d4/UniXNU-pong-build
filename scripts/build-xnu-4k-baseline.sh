@@ -95,6 +95,14 @@ for PATCH in "${PATCHES[@]}"; do
     echo "Skipping offline-owner-systemos-mount.patch: owner cache mounting is disabled in this baseline"
     continue
   fi
+  PATCH_NAME=$(basename "$PATCH")
+  if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && {
+    [ "$PATCH_NAME" = "zzzzzz-pong-writable-data.patch" ] ||
+    [[ "$PATCH_NAME" == *pong-ufs-data.patch ]];
+  }; then
+    echo "Skipping $PATCH_NAME: storage ABI bootstrap has no owner Data path"
+    continue
+  fi
   if { [ "$(basename "$PATCH")" = "offline-pgz-alignment-probe.patch" ] || [ "$(basename "$PATCH")" = "pgz-aligned-validation.patch" ]; } && [ "${XNU_ZONE_PGZ_ALIGNMENT_PROBE:-0}" != 1 ]; then
     echo "Skipping $(basename "$PATCH"): optional PGZ alignment probe is disabled in this baseline"
     continue
