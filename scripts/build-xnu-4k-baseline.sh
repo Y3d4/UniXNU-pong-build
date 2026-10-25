@@ -99,7 +99,8 @@ for PATCH in "${PATCHES[@]}"; do
   if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && [[ "$PATCH_NAME" == zzzzzzz* ]] &&
      [[ "$PATCH_NAME" != *pong-psci-smp.patch ]] &&
      [[ "$PATCH_NAME" != *pong-cpu-start-completion.patch ]] &&
-     [[ "$PATCH_NAME" != *pong-early-trace.patch ]]; then
+     [[ "$PATCH_NAME" != *pong-early-trace.patch ]] &&
+     [[ "$PATCH_NAME" != *pong-xnu-entry-marker.patch ]]; then
     echo "Skipping $PATCH_NAME: storage ABI bootstrap does not need late Pong userland patches"
     continue
   fi

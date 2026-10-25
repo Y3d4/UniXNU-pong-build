@@ -1,0 +1,21 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -222,1 +222,18 @@
+ LEXT(_start)
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	// Persistent marker at the first XNU instruction, before page-table setup.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9]
++	mov	w10, #8
++	str	w10, [x9, #4]
++	str	w10, [x9, #8]
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4e58
++	movk	w10, #0x3155, lsl #16
++	str	w10, [x9, #16]
++	dsb	sy
++#endif
