@@ -160,7 +160,7 @@ def main():
         # supposed to derive.  Disable the coupled owner mount policy too.
         for key in ('XNU_NATIVE_UFS', 'XNU_OWNER_DATA_UFS', 'XNU_OWNER_DATA_MOUNT',
                     'XNU_OWNER_CACHE_MOUNT', 'XNU_OWNER_CACHE_STARTUP',
-                    'XNU_PONG_APFS_DEBUG'):
+                    'XNU_PONG_APFS_DEBUG', 'XNU_PONG_ADRENO_PLATFORM'):
             env[key] = '0'
         env['XNU_STORAGE_ABI_BOOTSTRAP'] = '1'
     # Pong's complete SM8475 GMU/CP/BO/IRQ/Metal provider is linked through
