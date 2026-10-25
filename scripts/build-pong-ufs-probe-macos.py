@@ -29,6 +29,11 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     source = DEVICE / 'drivers/NativeUfs/NativeUfs.cpp'
     framework = tree / '.cache/fakeroot/System/Library/Frameworks/Kernel.framework/Versions/A'
+    storage_include = tree / 'build/storage-abi/include'
+    if not (storage_include / 'IOKit/storage/IOBlockStorageDevice.h').is_file():
+        storage_include = DEVICE / 'mac-build/storage-abi/include'
+    if not (storage_include / 'IOKit/storage/IOBlockStorageDevice.h').is_file():
+        raise SystemExit('Missing prepared IOStorageFamily headers; run scripts/prepare-storage-headers.py first')
     env = dict(os.environ, DEVELOPER_DIR=DEVELOPER)
     sdk = subprocess.check_output(
         ['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True, env=env).strip()
@@ -40,7 +45,7 @@ def main():
         '-DKERNEL=1', '-DKERNEL_PRIVATE=1', '-DXNU_KERNEL_PRIVATE=1',
         '-DXNU_PONG_EARLY_TRACE=' + str(int(trace_enabled)),
         '-DXNU_PONG_UFS_DATA=' + str(int('CONFIG_XNU_OWNER_DATA_UFS=y' in (DEVICE/'configs/pong_defconfig').read_text().splitlines())),
-        '-I' + str(DEVICE / 'mac-build/storage-abi/include'),
+        '-I' + str(storage_include),
         '-I' + str(tree / '.cache/xnu-work/EXTERNAL_HEADERS'),
         '-I' + str(framework / 'PrivateHeaders'), '-I' + str(framework / 'Headers'),
         '-Wall', '-Wextra', '-Werror', '-Wno-deprecated-declarations',
