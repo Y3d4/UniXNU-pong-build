@@ -96,6 +96,10 @@ for PATCH in "${PATCHES[@]}"; do
     continue
   fi
   PATCH_NAME=$(basename "$PATCH")
+  if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && [[ "$PATCH_NAME" == zzzzzzz* ]]; then
+    echo "Skipping $PATCH_NAME: storage ABI bootstrap does not need late Pong userland patches"
+    continue
+  fi
   if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && {
     [ "$PATCH_NAME" = "zzzzzz-pong-writable-data.patch" ] ||
     [[ "$PATCH_NAME" == *pong-ufs-data.patch ]] ||
