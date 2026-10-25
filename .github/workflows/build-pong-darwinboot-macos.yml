@@ -1,0 +1,137 @@
+name: Build Pong DarwinBoot on macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pong-darwinboot-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
+  HOMEBREW_NO_ENV_HINTS: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  darwinboot:
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out Pong device repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          path: device
+          persist-credentials: false
+
+      - name: Check out UniXNU package sources
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: unixnu
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Check out pinned Mu Basecore
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/mu_basecore
+          ref: cfb93724a06ff86ff5ba971413368a7809ee42a5
+          path: basecore
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            developer=/Applications/Xcode_26.6.app
+          elif [ -d /Applications/Xcode.app ]; then
+            developer=/Applications/Xcode.app
+          else
+            developer=$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort | tail -n 1)
+          fi
+          test -n "$developer"
+          echo "DEVELOPER_DIR=$developer/Contents/Developer" >> "$GITHUB_ENV"
+          echo "Using $developer"
+
+      - name: Install build tools
+        run: brew install llvm
+
+      - name: Check runner and inputs
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          sw_vers
+          uname -m
+          test -f "$GITHUB_WORKSPACE/basecore/MdePkg/MdePkg.dec"
+          test -f "$GITHUB_WORKSPACE/unixnu/package/UniXNUPkg/UniXNUPkg.dec"
+          test -f "$GITHUB_WORKSPACE/device/drivers/DarwinBoot22/DarwinBootPkg/DarwinBoot.dsc"
+
+      - name: Build BaseTools host utilities
+        working-directory: basecore/BaseTools/Source/C
+        run: make -j2
+
+      - name: Build DarwinBoot22
+        working-directory: device
+        run: |
+          set -euo pipefail
+          rm -rf "$GITHUB_WORKSPACE/device/mac-build/darwinboot22"
+          rm -rf "$RUNNER_TEMP/pong-darwinboot22"
+          python3 scripts/build-darwinboot22-macos.py \
+            --edk2 "$GITHUB_WORKSPACE/basecore" \
+            --package "$GITHUB_WORKSPACE/unixnu/package" \
+            --output-dir "$RUNNER_TEMP/pong-darwinboot22" \
+            --llvm "$(brew --prefix llvm)/bin"
+          test -s mac-build/darwinboot22/DarwinBoot22.efi
+          file mac-build/darwinboot22/DarwinBoot22.efi
+
+      - name: Stage artifact hashes
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifact"
+          if [ -d "$GITHUB_WORKSPACE/device/mac-build/darwinboot22" ]; then
+            cp -R "$GITHUB_WORKSPACE/device/mac-build/darwinboot22" "$GITHUB_WORKSPACE/artifact/"
+          fi
+          if [ -d "$RUNNER_TEMP/pong-darwinboot22" ]; then
+            cp -R "$RUNNER_TEMP/pong-darwinboot22" "$GITHUB_WORKSPACE/artifact/workspace"
+          fi
+          find "$GITHUB_WORKSPACE/artifact" -type f -print0 | xargs -0 shasum -a 256 \
+            > "$GITHUB_WORKSPACE/artifact/SHA256SUMS" || true
+
+      - name: Upload DarwinBoot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pong-darwinboot-macos-${{ github.run_number }}
+          path: artifact/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload DarwinBoot build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pong-darwinboot-macos-logs-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/pong-darwinboot22/*.log
+            ${{ runner.temp }}/pong-darwinboot22/**/*.log
+          if-no-files-found: warn
+          retention-days: 14
