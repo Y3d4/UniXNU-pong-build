@@ -97,7 +97,19 @@ jobs:
         run: |
           set -euo pipefail
           ./unixnu fetch
+          ./unixnu fetch IOStorageFamily
           ./unixnu tree
+
+      - name: Prepare public storage headers
+        working-directory: unixnu
+        run: |
+          set -euo pipefail
+          storage=$(find "$GITHUB_WORKSPACE/unixnu/out/feeds" -maxdepth 1 \
+            -type d -name 'IOStorageFamily-*' -print -quit)
+          test -n "$storage"
+          ln -s "$storage" "$GITHUB_WORKSPACE/unixnu/out/pong/tree/refer/IOStorageFamily"
+          cd "$GITHUB_WORKSPACE/unixnu/out/pong/tree"
+          python3 scripts/prepare-storage-headers.py
 
       - name: Fetch iOS 16.6.1 inputs
         working-directory: unixnu

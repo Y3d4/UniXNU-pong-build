@@ -122,6 +122,9 @@ def main():
     link(DEVICE / 'patches/xnu', tree / 'patches/xnu')
     for name in ('build', '.cache'):
         (tree / name).mkdir(exist_ok=True)
+    storage_abi = old / 'build/storage-abi'
+    if storage_abi.is_dir():
+        shutil.copytree(storage_abi, tree / 'build/storage-abi', dirs_exist_ok=True)
 
     env = {k: v for k, v in os.environ.items() if not k.startswith(('XNU_', 'UNIXNU_'))}
     env['PATH'] = str(Path(sys.executable).parent) + ':/opt/local/bin:/opt/local/sbin:' + env.get('PATH', '')
