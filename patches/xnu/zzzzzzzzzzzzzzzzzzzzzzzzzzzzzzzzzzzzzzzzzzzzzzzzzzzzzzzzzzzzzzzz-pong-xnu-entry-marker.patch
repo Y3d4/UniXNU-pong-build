@@ -51,3 +51,29 @@
 +2:
 +#endif
  	b	EXT(start_first_cpu)
+@@ -561,4 +561,13 @@
+ 	.globl EXT(start_first_cpu)
+ LEXT(start_first_cpu)
++	// Replace the entry marker to show the cold-CPU path was reached.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5043
++	movk	w10, #0x3155, lsl #16
++	str	w10, [x9, #16]
++	dsb	sy
+ 
+ 	// Unlock the core for debugging
+@@ -722,2 +731,11 @@
+ Lbootstrap_tables_ready:
++	// Page tables are ready; MMU is still off, so the reserved PA is direct.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x414d
++	movk	w10, #0x3150, lsl #16
++	str	w10, [x9, #16]
++	dsb	sy
+ 	/* Ensure TTEs are visible */
