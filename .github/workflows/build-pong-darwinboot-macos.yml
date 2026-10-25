@@ -73,6 +73,21 @@ jobs:
       - name: Install build tools
         run: brew install llvm lld
 
+      - name: Assemble LLVM linker tool path
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/pong-llvm-bin"
+          mkdir -p "$tool_dir"
+          for tool in "$(brew --prefix llvm)/bin"/* "$(brew --prefix lld)/bin"/*; do
+            [ -e "$tool" ] || continue
+            name=$(basename "$tool")
+            ln -s "$tool" "$tool_dir/$name" 2>/dev/null || true
+          done
+          test -x "$tool_dir/clang"
+          test -x "$tool_dir/llvm-lib"
+          test -x "$tool_dir/lld-link"
+          echo "PONG_LLVM_BIN=$tool_dir" >> "$GITHUB_ENV"
+
       - name: Check runner and inputs
         run: |
           set -euo pipefail
@@ -98,7 +113,7 @@ jobs:
             --edk2 "$GITHUB_WORKSPACE/basecore" \
             --package "$GITHUB_WORKSPACE/unixnu/package" \
             --output-dir "$RUNNER_TEMP/pong-darwinboot22" \
-            --llvm "$(brew --prefix llvm)/bin"
+            --llvm "$PONG_LLVM_BIN"
           test -s mac-build/darwinboot22/DarwinBoot22.efi
           file mac-build/darwinboot22/DarwinBoot22.efi
 
