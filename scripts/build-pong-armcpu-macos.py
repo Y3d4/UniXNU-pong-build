@@ -10,7 +10,8 @@ import subprocess
 
 DEVICE = Path(__file__).resolve().parents[1]
 DEFAULT_TREE = Path('/Volumes/PongDev/build/Pong-iOS16-native/tree')
-DEVELOPER = '/Volumes/PongDev/Applications/Xcode.app/Contents/Developer'
+DEVELOPER = os.environ.get('DEVELOPER_DIR',
+                           '/Volumes/PongDev/Applications/Xcode.app/Contents/Developer')
 
 
 def main():
@@ -21,8 +22,8 @@ def main():
                         help='compatibility option; this builder does not hash or audit images')
     args = parser.parse_args()
     tree = args.tree.resolve()
-    if platform.system() != 'Darwin' or platform.machine() != 'x86_64':
-        raise SystemExit('This continuation uses the Intel macOS toolchain')
+    if platform.system() != 'Darwin':
+        raise SystemExit('This continuation requires macOS with Xcode')
     out = tree / 'build/armcpu'
     out.mkdir(parents=True, exist_ok=True)
     source = DEVICE / 'drivers/ArmCpu/ArmCpu.cpp'

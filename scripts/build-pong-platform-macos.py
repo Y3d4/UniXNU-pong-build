@@ -10,7 +10,8 @@ import subprocess
 
 DEVICE = Path(__file__).resolve().parents[1]
 TREE = Path('/Volumes/PongDev/build/Pong-iOS16-native/tree')
-DEVELOPER = '/Volumes/PongDev/Applications/Xcode.app/Contents/Developer'
+DEVELOPER = os.environ.get('DEVELOPER_DIR',
+                           '/Volumes/PongDev/Applications/Xcode.app/Contents/Developer')
 
 
 def main():
@@ -19,8 +20,8 @@ def main():
     parser.add_argument('--skip-image-verification', action='store_true')
     args = parser.parse_args()
     tree = args.tree.resolve()
-    if platform.system() != 'Darwin' or platform.machine() != 'x86_64':
-        raise SystemExit('This continuation uses the Intel macOS toolchain')
+    if platform.system() != 'Darwin':
+        raise SystemExit('This continuation requires macOS with Xcode')
     out = tree / 'build/armdt-platform'
     out.mkdir(parents=True, exist_ok=True)
     source = DEVICE / 'drivers/ArmDTPlatform/ArmDTPlatform.cpp'
