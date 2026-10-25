@@ -217,6 +217,19 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          native_tree="$RUNNER_TEMP/pong-native/tree"
+          native_kernel="$native_tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong.unstripped"
+          mkdir -p "$GITHUB_WORKSPACE/artifact/symbols"
+          if [ -f "$native_kernel" ]; then
+            cp "$native_kernel" \
+              "$GITHUB_WORKSPACE/artifact/symbols/mach.development.pong.unstripped"
+            nm -nm -arch arm64 "$native_kernel" \
+              > "$GITHUB_WORKSPACE/artifact/symbols/mach.development.pong.nm.txt" || true
+            otool -l "$native_kernel" \
+              > "$GITHUB_WORKSPACE/artifact/symbols/mach.development.pong.otool.txt" || true
+          fi
+          find "$native_tree/build" -type f \( -name '*.map' -o -name '*.unstripped*' \) \
+            -print 2>/dev/null | sort > "$GITHUB_WORKSPACE/artifact/symbols/build-symbol-files.txt" || true
           mkdir -p "$GITHUB_WORKSPACE/artifact/reports"
           for path in \
             "$GITHUB_WORKSPACE/device/mac-build/storage-abi" \
