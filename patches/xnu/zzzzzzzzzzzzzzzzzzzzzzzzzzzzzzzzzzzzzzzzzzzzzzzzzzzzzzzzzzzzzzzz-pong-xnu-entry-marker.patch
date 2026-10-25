@@ -1,6 +1,6 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -222,1 +222,18 @@
+@@ -222,2 +222,19 @@
  LEXT(_start)
 +#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
 +	// Persistent marker at the first XNU instruction, before page-table setup.
@@ -19,3 +19,4 @@
 +	str	w10, [x9, #16]
 +	dsb	sy
 +#endif
+ 	b	EXT(start_first_cpu)
