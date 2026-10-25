@@ -213,10 +213,11 @@ def main():
         report['kernel'] = audit_kernel(kernel)
     if not args.skip_image_verification and settings.get('XNU_PONG_EARLY_TRACE') == '1':
         # Check markers emitted by the Pong-specific guarded call sites.
-        raw = kernel.read_bytes()
+        # Validate the unstripped Mach-O where compiled call-site literals remain.
+        raw = unstripped.read_bytes()
         markers = ['PongEarly: PE_init_platform returned',
                    'PongEarly: bootstrap %s', 'PongEarly: thread %s']
-        missing = [value for value in markers if value.encode() + b'\0' not in raw]
+        missing = [value for value in markers if value.encode() + b'\n\0' not in raw]
         if missing:
             raise SystemExit('Missing compiled Pong early-trace markers: ' + ', '.join(missing))
         report['early_trace_markers'] = markers
