@@ -98,7 +98,9 @@ for PATCH in "${PATCHES[@]}"; do
   PATCH_NAME=$(basename "$PATCH")
   if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && {
     [ "$PATCH_NAME" = "zzzzzz-pong-writable-data.patch" ] ||
-    [[ "$PATCH_NAME" == *pong-ufs-data.patch ]];
+    [[ "$PATCH_NAME" == *pong-ufs-data.patch ]] ||
+    [[ "$PATCH_NAME" == *pong-systemos-shared-region.patch ]] ||
+    [[ "$PATCH_NAME" == *pong-upstream-oct22.patch ]];
   }; then
     echo "Skipping $PATCH_NAME: storage ABI bootstrap has no owner Data path"
     continue
