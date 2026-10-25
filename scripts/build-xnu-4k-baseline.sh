@@ -947,6 +947,9 @@ if [ "$PONG_ADRENO_PLATFORM" = 1 ]; then
   # Keep foreign A740/Redwood hardware owners disabled independently.
   PONG_DRIVER_SOURCE=${PONG_NATIVE_DRIVER_SOURCE:-$ROOT}
   PONG_ADRENO_ARGS=(--output-dir "$ROOT/build/pong-adreno" --tree "$ROOT")
+  if [ -n "${DEVELOPER_DIR:-}" ]; then
+    PONG_ADRENO_ARGS+=(--developer-dir "$DEVELOPER_DIR")
+  fi
   if [ -n "${PONG_ADRENO_FIRMWARE_DIR:-}" ]; then
     PONG_ADRENO_ARGS+=(--firmware-dir "$PONG_ADRENO_FIRMWARE_DIR")
   fi
