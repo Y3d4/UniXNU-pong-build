@@ -187,6 +187,9 @@ jobs:
             -type d -name 'corecrypto-2023-*' -print -quit)
           test -n "$source"
           ln -s "$source" refer/corecrypto-2023
+          mkdir -p build/xnu/ios-obj
+          ln -s DEVELOPMENT_ARM64_PONG build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837
+          test -s build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/link.filelist
           python3 scripts/build-corecrypto-14.py
           python3 scripts/build-corecrypto-14.py --namespace
           ls -lh build/corecrypto-2023/libcorecrypto_kernel_noasm*.a
