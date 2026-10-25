@@ -183,6 +183,10 @@ jobs:
         working-directory: ${{ runner.temp }}/pong-bootstrap/tree
         run: |
           set -euo pipefail
+          source=$(find "$GITHUB_WORKSPACE/unixnu/out/feeds" -maxdepth 1 \
+            -type d -name 'corecrypto-2023-*' -print -quit)
+          test -n "$source"
+          ln -s "$source" refer/corecrypto-2023
           python3 scripts/build-corecrypto-14.py
           python3 scripts/build-corecrypto-14.py --namespace
           ls -lh build/corecrypto-2023/libcorecrypto_kernel_noasm*.a
