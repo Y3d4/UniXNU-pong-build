@@ -71,7 +71,7 @@ jobs:
           echo "Using $developer"
 
       - name: Install build tools
-        run: brew install llvm
+        run: brew install llvm lld
 
       - name: Check runner and inputs
         run: |
