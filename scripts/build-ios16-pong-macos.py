@@ -212,16 +212,14 @@ def main():
         report['unstripped_kernel'] = audit_kernel(unstripped)
         report['kernel'] = audit_kernel(kernel)
     if not args.skip_image_verification and settings.get('XNU_PONG_EARLY_TRACE') == '1':
-        # These literals are unique to the enabled IOKit/PE call sites.  A
-        # patched source file alone does not prove its conditional code was
-        # compiled, and changing per-object flags need not invalidate make.
+        # Check markers emitted by the Pong-specific guarded call sites.
         raw = kernel.read_bytes()
-        markers = ['IOKit root allocation', 'configureDefaults returned',
-                   'PE_init_printf enter', 'pe_prepare_images returned']
+        markers = ['PongEarly: PE_init_platform returned',
+                   'PongEarly: bootstrap %s', 'PongEarly: thread %s']
         missing = [value for value in markers if value.encode() + b'\0' not in raw]
         if missing:
-            raise SystemExit('Missing compiled IOKit trace markers: ' + ', '.join(missing))
-        report['iokit_trace_markers'] = markers
+            raise SystemExit('Missing compiled Pong early-trace markers: ' + ', '.join(missing))
+        report['early_trace_markers'] = markers
     if not args.skip_image_verification and settings.get('XNU_PONG_VOLATILE_PANIC_LOG') == '1':
         if b'_pong_volatile_panic_log\0' not in unstripped.read_bytes():
             raise SystemExit('Requested volatile panic buffer was not compiled into the kernel')

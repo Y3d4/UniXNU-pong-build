@@ -1,0 +1,28 @@
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -368,4 +368,7 @@
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	printf("PongEarly: PE_init_platform returned\n");
++#endif
+ 
+ #if __arm64__
+ 	configure_timer_apple_regs();
+--- a/osfmk/kern/startup.c
++++ b/osfmk/kern/startup.c
+@@ -222,4 +222,7 @@ kernel_bootstrap_log(const char *message)
+ {
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	printf("PongEarly: bootstrap %s\n", message);
++#endif
+ 	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
+ 	    startup_phase >= STARTUP_SUB_KPRINTF) {
+ 		kprintf("kernel_bootstrap: %s\n", message);
+@@ -232,4 +235,7 @@ kernel_bootstrap_thread_log(const char *message)
+ {
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	printf("PongEarly: thread %s\n", message);
++#endif
+ 	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
+ 	    startup_phase >= STARTUP_SUB_KPRINTF) {
+ 		kprintf("kernel_bootstrap_thread: %s\n", message);
