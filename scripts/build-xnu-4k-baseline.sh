@@ -1086,6 +1086,10 @@ make -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}" SDKROOT="${XNU_SDKROOT:-iph
   RC_NONARCH_CFLAGS="$EXTRA_CFLAGS" "${EXTRA_MAKE_ARGS[@]}" \
   OBJROOT="$ROOT/build/xnu/ios-obj" SYMROOT="$ROOT/build/xnu/ios-sym" DSTROOT="$ROOT/build/xnu/ios-dst"
 if [ "${XNU_SOURCE_CORECRYPTO14:-0}" = 1 ] && [ "$CRYPTO_BOOTSTRAP_MODE" = source ]; then
-  python3 scripts/seal-source-crypto-kernel.py \
-    build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong.unstripped.noctf
+  for kernel in \
+    build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong.unstripped \
+    build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong; do
+    test -s "$kernel"
+    python3 scripts/seal-source-crypto-kernel.py "$kernel"
+  done
 fi
