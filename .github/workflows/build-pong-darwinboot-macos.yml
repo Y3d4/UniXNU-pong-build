@@ -115,6 +115,8 @@ jobs:
           done
           sed -i '' 's@/OPT:REF@/OPT:NOREF@g' \
             "$RUNNER_TEMP/pong-darwinboot22/Conf/tools_def.txt"
+          sed -i '' 's@ -flto@@g' \
+            "$RUNNER_TEMP/pong-darwinboot22/Conf/tools_def.txt"
           python3 scripts/build-darwinboot22-macos.py \
             --edk2 "$GITHUB_WORKSPACE/basecore" \
             --package "$GITHUB_WORKSPACE/unixnu/package" \
