@@ -97,6 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           ./unixnu fetch
+          ./unixnu fetch IOStorageFamily
           ./unixnu tree
 
       - name: Prepare public storage headers
