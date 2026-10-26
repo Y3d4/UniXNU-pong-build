@@ -1,0 +1,203 @@
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -259,6 +259,27 @@ LEXT(_start)
+ 	wfe
+ 	b	1b
+ #else
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: XNUENTRY.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4e58
++	movk	w10, #0x4555, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x544e
++	movk	w10, #0x5952, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 	b	EXT(start_first_cpu)
+ #endif
+ 
+@@ -496,6 +517,27 @@ start_cpu:
+ 	.globl EXT(start_first_cpu)
+ LEXT(start_first_cpu)
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: STSENTER.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5453
++	movk	w10, #0x4553, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x544e
++	movk	w10, #0x5245, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 	// Unlock the core for debugging
+ 	msr		OSLAR_EL1, xzr
+ 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
+@@ -645,6 +687,27 @@ Lkernelcache_base_found:
+ 	/* create_bootstrap_mapping(vbase, pbase, num_ents, L1 table, freeptr) */
+ 	create_bootstrap_mapping x0,  x4,  x5, x1, x2, x6, x10, x11, x12, x13
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: PTVPEQ00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5450
++	movk	w10, #0x5056, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5145
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 	/* Setup the KVA bootstrap mapping */
+ 	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
+@@ -652,6 +715,27 @@ Lkernelcache_base_found:
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: PTKVA000.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5450
++	movk	w10, #0x564b, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x3041
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 
+ 	b		common_start
+ 
+@@ -673,6 +757,27 @@ Lkernelcache_base_found:
+  */
+ common_start:
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: MMUPRE00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4d4d
++	movk	w10, #0x5055, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4552
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ #if HAS_NEX_PG
+ 	mov x19, lr
+ 	bl		EXT(set_nex_pg)
+@@ -785,6 +890,29 @@ common_start:
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: MMUON000.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4d4d
++	movk	w10, #0x4f55, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x304e
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ #if defined(XNU_PONG_ENTRY_STAGE) && XNU_PONG_ENTRY_STAGE
+ 	// Diagnostic-only checkpoint after common_start has enabled the MMU.
+ 	// Preserve a compact pmsg record, then reset so Android can read it.
+@@ -913,6 +1041,29 @@ common_start:
+ 	dsb	sy
+ #endif
+ 
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: ARMINIT0.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x5241
++	movk	w10, #0x494d, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x494e
++	movk	w10, #0x3054, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 	// Return to arm_init()
+ 	ret
+ 
