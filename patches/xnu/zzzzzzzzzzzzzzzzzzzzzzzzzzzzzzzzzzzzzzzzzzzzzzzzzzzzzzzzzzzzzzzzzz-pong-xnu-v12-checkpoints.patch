@@ -1,0 +1,424 @@
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 0c00ff2..705f0ab 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -256,7 +256,47 @@ LEXT(_start)
+ 	dsb	sy
+ #endif
+ 
++#if defined(XNU_PONG_ENTRY_RESET) && XNU_PONG_ENTRY_RESET
++	// Diagnostic-only mode: prove that DarwinBoot reached the XNU entry.
++	// The pmsg half of the board's ramoops reservation is physically mapped
++	// before MMU setup. Write a Linux-compatible persistent record before the
++	// PSCI reset, so Android can distinguish entry from bootloader fallback.
++	movz	x9, #0x8540, lsl #16
++	movz	w11, #15
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5820
++	movk	w10, #0x554e, lsl #16
++	str	w10, [x9, #16]
++	movz	w10, #0x4520
++	movk	w10, #0x544e, lsl #16
++	str	w10, [x9, #20]
++	movz	w10, #0x5952
++	movk	w10, #0x000a, lsl #16
++	str	w10, [x9, #24]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	str	w11, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++	// PSCI SYSTEM_RESET precedes start_first_cpu and MMU setup.
++	movz	w0, #0x0009
++	movk	w0, #0x8400, lsl #16
++	mov	x1, xzr
++	mov	x2, xzr
++	mov	x3, xzr
++	smc	#0
++1:
++	wfe
++	b	1b
++#else
+ 	b	EXT(start_first_cpu)
++#endif
+ 
+ 
+ /*
+@@ -833,7 +873,7 @@ common_start:
+ 	movz	w10, #0x4d4d
+ 	movk	w10, #0x5055, lsl #16
+ 	str	w10, [x9, #12]
+-	movz	w10, #0x5245
++	movz	w10, #0x4552
+ 	movk	w10, #0x3030, lsl #16
+ 	str	w10, [x9, #16]
+ 	dc	cvac, x9
+@@ -850,9 +890,49 @@ common_start:
+ 
+ 
+ #if HAS_NEX_PG
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: NEXENT00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x454e
++	movk	w10, #0x4558, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x544e
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 	mov x19, lr
+ 	bl		EXT(set_nex_pg)
+ 	mov lr, x19
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: NEXDON00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x454e
++	movk	w10, #0x4458, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4e4f
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ #endif
+ 
+ 	// Set the translation control register.
+@@ -860,6 +940,26 @@ common_start:
+ 	add		x0, x0, EXT(sysreg_restore)@pageoff
+ 	ldr		x1, [x0, SR_RESTORE_TCR_EL1]
+ 	MSR_TCR_EL1_X1
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: TCRDON00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4354
++	movk	w10, #0x4452, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4e4f
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 
+ 	/* Set up translation table base registers.
+ 	 *	TTBR0 - V=P table @ top of kernel
+@@ -871,12 +971,72 @@ common_start:
+ 	 */
+ #endif
+ 	and		x0, x25, #(TTBR_BADDR_MASK)
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: TTBPRE00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5454
++	movk	w10, #0x5042, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4552
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 	mov		x19, lr
+ 	bl		EXT(set_mmu_ttb)
+ 	mov		lr, x19
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: TTB0DO00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5454
++	movk	w10, #0x3042, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4f44
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 	add		x0, x25, PGBYTES
+ 	and		x0, x0, #(TTBR_BADDR_MASK)
+ 	MSR_TTBR1_EL1_X0
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: TTB1DO00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x5454
++	movk	w10, #0x3142, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4f44
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 
+ 	// Set up MAIR attr0 for normal memory, attr1 for device memory
+ 	mov		x0, xzr
+@@ -900,6 +1060,26 @@ common_start:
+ 	isb
+ 	tlbi	vmalle1
+ 	dsb		ish
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: MAIRDO00.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x414d
++	movk	w10, #0x5249, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4f44
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 
+ 
+ #if defined(BCM2837) && (!defined(XNU_NATIVE_ARCH_TIMER) || !XNU_NATIVE_ARCH_TIMER)
+@@ -951,6 +1131,26 @@ common_start:
+ 	sub		x0, x0, x23
+ 1:
+ 	MSR_VBAR_EL1_X0
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: VBARDON0.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4256
++	movk	w10, #0x5241, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4f44
++	movk	w10, #0x304e, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 
+ #if HAS_APPLE_PAC
+ 	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
+@@ -958,17 +1158,37 @@ common_start:
+ 
+ 	// Enable caches, MMU, ROP and JOP
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
++#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
++	// Diagnostic checkpoint: SCTLRPR0.
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4353
++	movk	w10, #0x4c54, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5052
++	movk	w10, #0x3052, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++#endif
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ #if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
+-	// Diagnostic checkpoint: MMUON000.
++	// Diagnostic checkpoint: MMUONP00.
++	// Stay on the TTBR0 V=P alias. Do not convert through x22/x23 here:
++	// this first probe must not depend on a successful KVA translation.
+ 	movz	x9, #0x8540, lsl #16
+-	add	x9, x9, x22
+-	sub	x9, x9, x23
+ 	movz	w10, #0x4d4d
+-	movk	w10, #0x554f, lsl #16
++	movk	w10, #0x4f55, lsl #16
+ 	str	w10, [x9, #12]
+-	movz	w10, #0x304e
++	movz	w10, #0x504e
+ 	movk	w10, #0x3030, lsl #16
+ 	str	w10, [x9, #16]
+ 	dc	cvac, x9
+@@ -981,9 +1201,96 @@ common_start:
+ 	str	w10, [x9, #8]
+ 	dc	cvac, x9
+ 	dsb	sy
++
++	// Record whether the requested SCTLR value took effect.
++	// x0 still holds the requested value; only the probe registers are touched.
++	mrs	x10, SCTLR_EL1
++	cmp	x10, x0
++	b.ne	1f
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4353
++	movk	w10, #0x4c54, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4b4f
++	movk	w10, #0x3030, lsl #16
++	str	w10, [x9, #16]
++	b	2f
++1:
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4353
++	movk	w10, #0x4c54, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4146
++	movk	w10, #0x4c49, lsl #16
++	str	w10, [x9, #16]
++2:
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
+ #endif
+ 
+ 
++#if defined(XNU_PONG_ENTRY_STAGE) && XNU_PONG_ENTRY_STAGE
++	// Diagnostic-only checkpoint after common_start has enabled the MMU.
++	// Preserve a compact pmsg record, then reset so Android can read it.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5820
++	movk	w10, #0x554e, lsl #16
++	str	w10, [x9, #16]
++	movz	w10, #0x4d20
++	movk	w10, #0x554d, lsl #16
++	str	w10, [x9, #20]
++	movz	w10, #0x000a
++	str	w10, [x9, #24]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #13
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++	// PSCI SYSTEM_RESET here means XNU passed the initial MMU transition.
++	movz	w0, #0x0009
++	movk	w0, #0x8400, lsl #16
++	mov	x1, xzr
++	mov	x2, xzr
++	mov	x3, xzr
++	smc	#0
++1:
++	wfe
++	b	1b
++#endif
++
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	// MMU is enabled. Use the already-installed KVA mapping for the PA.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4d4d
++	movk	w10, #0x3155, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ #if !VMAPPLE
+ 	MOV64   x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1
+@@ -1071,6 +1378,18 @@ common_start:
+ 	dsb	sy
+ #endif
+ 
++#if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
++	// Return marker: common_start completed and arm_init() is next.
++	movz	x9, #0x8540, lsl #16
++	add	x9, x9, x22
++	sub	x9, x9, x23
++	movz	w10, #0x4552
++	movk	w10, #0x3154, lsl #16
++	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++#endif
++
+ 	// Return to arm_init()
+ 	ret
+ 
