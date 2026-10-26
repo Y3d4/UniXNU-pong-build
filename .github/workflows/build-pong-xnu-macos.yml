@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_mmu_reset:
+        description: Build a diagnostic kernel that records reaching common_start after MMU enable, then resets
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -93,7 +98,7 @@ jobs:
         run: brew install llvm lld mtools dtc unifdef ripgrep
 
       - name: Check required firmware secret
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -143,7 +148,7 @@ jobs:
           exit 1
 
       - name: Download Pong GPU firmware
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -189,7 +194,7 @@ jobs:
             --bootstrap-storage-abi
 
       - name: Build source CoreCrypto archives for v8
-        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true || inputs.diagnostic_entry_reset == true }}
+        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true || inputs.diagnostic_entry_reset == true || inputs.diagnostic_mmu_reset == true }}
         working-directory: ${{ runner.temp }}/pong-bootstrap/tree
         run: |
           set -euo pipefail
@@ -205,7 +210,7 @@ jobs:
           ls -lh build/corecrypto-2023/libcorecrypto_kernel_noasm*.a
 
       - name: Emit corecrypto ABI candidate
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -218,7 +223,7 @@ jobs:
             --skip-bootimg
 
       - name: Audit iOS 16 storage ABI
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -248,7 +253,7 @@ jobs:
             --jobs 4
             --artifact-dir "$GITHUB_WORKSPACE/artifact/kernel"
           )
-          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" || "${{ inputs.diagnostic_entry_reset }}" == "true" ]]; then
+          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" || "${{ inputs.diagnostic_entry_reset }}" == "true" || "${{ inputs.diagnostic_mmu_reset }}" == "true" ]]; then
             python3 - <<'PY'
           import os
           from pathlib import Path
@@ -264,6 +269,8 @@ jobs:
               changes['CONFIG_XNU_PONG_EARLY_TRACE=n'] = 'CONFIG_XNU_PONG_EARLY_TRACE=y'
           if "${{ inputs.diagnostic_entry_reset }}" == "true":
               changes['CONFIG_XNU_PONG_ENTRY_RESET=n'] = 'CONFIG_XNU_PONG_ENTRY_RESET=y'
+          if "${{ inputs.diagnostic_mmu_reset }}" == "true":
+              changes['CONFIG_XNU_PONG_ENTRY_STAGE=0'] = 'CONFIG_XNU_PONG_ENTRY_STAGE=1'
           for old, new in changes.items():
               if text.count(old) != 1:
                   raise SystemExit(f"Expected exactly one {old!r} in {path}")
