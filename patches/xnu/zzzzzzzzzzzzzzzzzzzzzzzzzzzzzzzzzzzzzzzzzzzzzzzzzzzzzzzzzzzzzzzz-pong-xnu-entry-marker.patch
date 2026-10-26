@@ -2,12 +2,40 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 index 4de9052..522380c 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -221,4 +221,18 @@
+@@ -220,6 +220,46 @@
+ 	.align	3
  	.globl EXT(_start)
  LEXT(_start)
+-	b	EXT(start_first_cpu)
 +#if defined(XNU_PONG_ENTRY_RESET) && XNU_PONG_ENTRY_RESET
 +	// Diagnostic-only mode: prove that DarwinBoot reached the XNU entry.
-+	// PSCI SYSTEM_RESET is before start_first_cpu and before MMU-dependent code.
++	// The pmsg half of the board's ramoops reservation is physically mapped
++	// before MMU setup. Write a Linux-compatible persistent record before the
++	// PSCI reset, so Android can distinguish entry from bootloader fallback.
++	movz	x9, #0x8540, lsl #16
++	movz	w11, #15
++	movz	w10, #0x4f50
++	movk	w10, #0x474e, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5820
++	movk	w10, #0x554e, lsl #16
++	str	w10, [x9, #16]
++	movz	w10, #0x4520
++	movk	w10, #0x544e, lsl #16
++	str	w10, [x9, #20]
++	movz	w10, #0x5952
++	movk	w10, #0x000a, lsl #16
++	str	w10, [x9, #24]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	str	w11, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++	// PSCI SYSTEM_RESET precedes start_first_cpu and MMU setup.
 +	movz	w0, #0x0009
 +	movk	w0, #0x8400, lsl #16
 +	mov	x1, xzr
@@ -18,9 +46,11 @@ index 4de9052..522380c 100644
 +	wfe
 +	b	1b
 +#else
- 	b	EXT(start_first_cpu)
++	b	EXT(start_first_cpu)
 +#endif
-
+ 
+ 
+ /*
 @@ -856,6 +856,21 @@ common_start:
  	MSR_SCTLR_EL1_X0
  	isb		sy
