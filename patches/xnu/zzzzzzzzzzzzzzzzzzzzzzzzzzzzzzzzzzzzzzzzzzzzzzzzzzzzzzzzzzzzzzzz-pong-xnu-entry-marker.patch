@@ -1,8 +1,8 @@
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index 4de9052..522380c 100644
+index 4de9052..5d277b4 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -220,6 +220,46 @@
+@@ -235,7 +235,47 @@
  	.align	3
  	.globl EXT(_start)
  LEXT(_start)
@@ -51,7 +51,7 @@ index 4de9052..522380c 100644
  
  
  /*
-@@ -856,6 +856,21 @@ common_start:
+@@ -856,6 +896,21 @@ common_start:
  	MSR_SCTLR_EL1_X0
  	isb		sy
  
@@ -73,7 +73,7 @@ index 4de9052..522380c 100644
  #if !VMAPPLE
  	MOV64   x1, SCTLR_EL1_DEFAULT
  	cmp		x0, x1
-@@ -920,6 +935,18 @@ common_start:
+@@ -920,6 +975,18 @@ common_start:
  	mov	lr, x21
  #endif
  
