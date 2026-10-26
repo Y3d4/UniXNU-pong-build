@@ -1,7 +1,10 @@
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -787,0 +788,38 @@
+@@ -785,6 +785,45 @@ common_start:
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ 
 +#if defined(XNU_PONG_ENTRY_STAGE) && XNU_PONG_ENTRY_STAGE
 +	// Diagnostic-only checkpoint after common_start has enabled the MMU.
 +	// Preserve a compact pmsg record, then reset so Android can read it.
@@ -40,3 +43,7 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +	wfe
 +	b	1b
 +#endif
++
+ #if defined(XNU_PONG_EARLY_TRACE) && XNU_PONG_EARLY_TRACE
+ 	// MMU is enabled. Use the already-installed KVA mapping for the PA.
+ 	movz	x9, #0x8540, lsl #16
