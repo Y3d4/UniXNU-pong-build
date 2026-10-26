@@ -189,7 +189,7 @@ jobs:
             --bootstrap-storage-abi
 
       - name: Build source CoreCrypto archives for v8
-        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true }}
+        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true || inputs.diagnostic_entry_reset == true }}
         working-directory: ${{ runner.temp }}/pong-bootstrap/tree
         run: |
           set -euo pipefail
@@ -248,7 +248,7 @@ jobs:
             --jobs 4
             --artifact-dir "$GITHUB_WORKSPACE/artifact/kernel"
           )
-          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" ]]; then
+          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" || "${{ inputs.diagnostic_entry_reset }}" == "true" ]]; then
             python3 - <<'PY'
           import os
           from pathlib import Path
@@ -275,25 +275,6 @@ jobs:
             mkdir -p "$RUNNER_TEMP/pong-native/tree/build/corecrypto-2023"
             cp "$RUNNER_TEMP/pong-bootstrap/tree/build/corecrypto-2023/libcorecrypto_kernel_noasm-namespaced.a" \
               "$RUNNER_TEMP/pong-native/tree/build/corecrypto-2023/"
-            python3 "$GITHUB_WORKSPACE/device/scripts/build-ios16-pong-macos.py" "${args[@]}"
-          elif [[ "${{ inputs.diagnostic_entry_reset }}" == "true" ]]; then
-            python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          path = Path(os.environ["GITHUB_WORKSPACE"]) / "device/configs/pong_defconfig"
-          text = path.read_text()
-          changes = {
-              'CONFIG_XNU_PONG_ADRENO_PLATFORM=y': 'CONFIG_XNU_PONG_ADRENO_PLATFORM=n',
-              'CONFIG_XNU_PONG_ENTRY_RESET=n': 'CONFIG_XNU_PONG_ENTRY_RESET=y',
-          }
-          for old, new in changes.items():
-              if text.count(old) != 1:
-                  raise SystemExit(f"Expected exactly one {old!r} in {path}")
-              text = text.replace(old, new)
-          path.write_text(text)
-          PY
-            args+=(--skip-image-verification)
             python3 "$GITHUB_WORKSPACE/device/scripts/build-ios16-pong-macos.py" "${args[@]}"
           else
             args+=(--skip-image-verification)
