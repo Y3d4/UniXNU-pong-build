@@ -1,10 +1,11 @@
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 4de9052..0c00ff2 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -259,6 +259,27 @@ LEXT(_start)
- 	wfe
- 	b	1b
- #else
+@@ -235,6 +235,27 @@ LEXT(ResetHandlerData)
+ 	.align	3
+ 	.globl EXT(_start)
+ LEXT(_start)
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
 +	// Diagnostic checkpoint: XNUENTRY.
 +	movz	x9, #0x8540, lsl #16
@@ -27,12 +28,12 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +#endif
 +
  	b	EXT(start_first_cpu)
- #endif
  
-@@ -496,6 +517,27 @@ start_cpu:
+ 
+@@ -560,6 +581,27 @@ start_cpu:
+ 	.align 2
  	.globl EXT(start_first_cpu)
  LEXT(start_first_cpu)
- 
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
 +	// Diagnostic checkpoint: STSENTER.
 +	movz	x9, #0x8540, lsl #16
@@ -54,10 +55,10 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +	dsb	sy
 +#endif
 +
+ 
  	// Unlock the core for debugging
  	msr		OSLAR_EL1, xzr
- 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
-@@ -645,6 +687,27 @@ Lkernelcache_base_found:
+@@ -710,9 +752,51 @@ Lkernelcache_base_found:
  	/* create_bootstrap_mapping(vbase, pbase, num_ents, L1 table, freeptr) */
  	create_bootstrap_mapping x0,  x4,  x5, x1, x2, x6, x10, x11, x12, x13
  
@@ -85,10 +86,6 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
  	/* Setup the KVA bootstrap mapping */
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
-@@ -652,6 +715,27 @@ Lkernelcache_base_found:
- 	/* Ensure TTEs are visible */
- 	dsb		ish
- 
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
 +	// Diagnostic checkpoint: PTKVA000.
 +	movz	x9, #0x8540, lsl #16
@@ -111,19 +108,19 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +#endif
 +
  
- 	b		common_start
- 
-@@ -673,6 +757,27 @@ Lkernelcache_base_found:
+ 	b Lbootstrap_tables_ready
+ Lbootstrap_tables_exhausted:
+@@ -743,6 +827,27 @@ Lbootstrap_tables_ready:
+  *	TPIDRRO_EL0 - CPU number
   */
  common_start:
- 
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
 +	// Diagnostic checkpoint: MMUPRE00.
 +	movz	x9, #0x8540, lsl #16
 +	movz	w10, #0x4d4d
 +	movk	w10, #0x5055, lsl #16
 +	str	w10, [x9, #12]
-+	movz	w10, #0x4552
++	movz	w10, #0x5245
 +	movk	w10, #0x3030, lsl #16
 +	str	w10, [x9, #16]
 +	dc	cvac, x9
@@ -138,20 +135,20 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +	dsb	sy
 +#endif
 +
+ 
  #if HAS_NEX_PG
  	mov x19, lr
- 	bl		EXT(set_nex_pg)
-@@ -785,6 +890,29 @@ common_start:
+@@ -855,6 +960,29 @@ common_start:
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
  	MSR_SCTLR_EL1_X0
  	isb		sy
- 
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
 +	// Diagnostic checkpoint: MMUON000.
 +	movz	x9, #0x8540, lsl #16
 +	add	x9, x9, x22
 +	sub	x9, x9, x23
 +	movz	w10, #0x4d4d
-+	movk	w10, #0x4f55, lsl #16
++	movk	w10, #0x554f, lsl #16
 +	str	w10, [x9, #12]
 +	movz	w10, #0x304e
 +	movk	w10, #0x3030, lsl #16
@@ -168,11 +165,11 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 +	dsb	sy
 +#endif
 +
- #if defined(XNU_PONG_ENTRY_STAGE) && XNU_PONG_ENTRY_STAGE
- 	// Diagnostic-only checkpoint after common_start has enabled the MMU.
- 	// Preserve a compact pmsg record, then reset so Android can read it.
-@@ -913,6 +1041,29 @@ common_start:
- 	dsb	sy
+ 
+ #if !VMAPPLE
+ 	MOV64   x1, SCTLR_EL1_DEFAULT
+@@ -920,6 +1048,29 @@ common_start:
+ 	mov	lr, x21
  #endif
  
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
