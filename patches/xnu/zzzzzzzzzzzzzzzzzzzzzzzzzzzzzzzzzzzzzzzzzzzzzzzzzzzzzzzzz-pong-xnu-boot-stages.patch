@@ -1,8 +1,6 @@
-diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index 4de9052..0c00ff2 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -235,6 +235,27 @@ LEXT(ResetHandlerData)
+@@ -235,6 +235,27 @@
  	.align	3
  	.globl EXT(_start)
  LEXT(_start)
@@ -30,7 +28,7 @@ index 4de9052..0c00ff2 100644
  	b	EXT(start_first_cpu)
  
  
-@@ -560,6 +581,27 @@ start_cpu:
+@@ -560,6 +581,27 @@
  	.align 2
  	.globl EXT(start_first_cpu)
  LEXT(start_first_cpu)
@@ -58,7 +56,7 @@ index 4de9052..0c00ff2 100644
  
  	// Unlock the core for debugging
  	msr		OSLAR_EL1, xzr
-@@ -710,9 +752,51 @@ Lkernelcache_base_found:
+@@ -710,9 +752,51 @@
  	/* create_bootstrap_mapping(vbase, pbase, num_ents, L1 table, freeptr) */
  	create_bootstrap_mapping x0,  x4,  x5, x1, x2, x6, x10, x11, x12, x13
  
@@ -110,7 +108,7 @@ index 4de9052..0c00ff2 100644
  
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
-@@ -743,6 +827,27 @@ Lbootstrap_tables_ready:
+@@ -743,6 +827,27 @@
   *	TPIDRRO_EL0 - CPU number
   */
  common_start:
@@ -138,21 +136,54 @@ index 4de9052..0c00ff2 100644
  
  #if HAS_NEX_PG
  	mov x19, lr
-@@ -855,6 +960,29 @@ common_start:
+@@ -855,6 +960,62 @@
  	MOV64   x0, SCTLR_EL1_DEFAULT
  	MSR_SCTLR_EL1_X0
  	isb		sy
 +#if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
-+	// Diagnostic checkpoint: MMUON000.
++	// Diagnostic checkpoint: MMUONP00.
++	// Stay on the TTBR0 V=P alias. Do not convert through x22/x23 here:
++	// this first probe must not depend on a successful KVA translation.
 +	movz	x9, #0x8540, lsl #16
-+	add	x9, x9, x22
-+	sub	x9, x9, x23
 +	movz	w10, #0x4d4d
 +	movk	w10, #0x554f, lsl #16
 +	str	w10, [x9, #12]
-+	movz	w10, #0x304e
++	movz	w10, #0x504e
 +	movk	w10, #0x3030, lsl #16
 +	str	w10, [x9, #16]
++	dc	cvac, x9
++	dsb	sy
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16
++	str	w10, [x9, #0]
++	str	wzr, [x9, #4]
++	movz	w10, #8
++	str	w10, [x9, #8]
++	dc	cvac, x9
++	dsb	sy
++
++	// Record whether the requested SCTLR value took effect.
++	MOV64	x1, SCTLR_EL1_DEFAULT
++	mrs	x2, SCTLR_EL1
++	cmp	x2, x1
++	b.ne	1f
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4353
++	movk	w10, #0x4d4c, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x5441
++	movk	w10, #0x4843, lsl #16
++	str	w10, [x9, #16]
++	b	2f
++1:
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4353
++	movk	w10, #0x444c, lsl #16
++	str	w10, [x9, #12]
++	movz	w10, #0x4649
++	movk	w10, #0x3046, lsl #16
++	str	w10, [x9, #16]
++2:
 +	dc	cvac, x9
 +	dsb	sy
 +	movz	w10, #0x4244
@@ -168,7 +199,7 @@ index 4de9052..0c00ff2 100644
  
  #if !VMAPPLE
  	MOV64   x1, SCTLR_EL1_DEFAULT
-@@ -920,6 +1048,29 @@ common_start:
+@@ -920,6 +1081,29 @@
  	mov	lr, x21
  #endif
  
