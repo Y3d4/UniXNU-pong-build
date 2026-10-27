@@ -1,6 +1,6 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -308,7 +308,181 @@
+@@ -308,7 +308,165 @@
  	.align 12, 0
  	.global	EXT(LowExceptionVectorBase)
  LEXT(LowExceptionVectorBase)
@@ -27,7 +27,7 @@
 +	b		.
 +	.align	7
 +	b		.
-+	/* EL0 64-bit: all eight slots stay present. */
++	/* EL0 64-bit: architectural four slots. */
 +	.align	7
 +	b		.
 +	.align	7
@@ -36,23 +36,7 @@
 +	b		.
 +	.align	7
 +	b		.
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
-+	/* EL0 32-bit: all eight slots stay present. */
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
-+	.align	7
-+	b		.
++	/* EL0 32-bit: architectural four slots. */
 +	.align	7
 +	b		.
 +	.align	7
@@ -183,7 +167,7 @@
  	b		.
  	.align	7
  	b		.
-@@ -343,6 +517,7 @@
+@@ -343,6 +501,7 @@
  	b		.
  	.align	7
  	b		.
@@ -191,7 +175,7 @@
  #if defined(GENERIC_PSCI_SMP)
  /*
   * PSCI exception capture for a core other than the boot processor, from its first
-@@ -1110,10 +1285,16 @@
+@@ -1110,10 +1269,16 @@
  
  	cbnz		x21, 1f
  #endif /* __ARM_KERNEL_PROTECT__ */
@@ -208,7 +192,7 @@
  1:
  	MSR_VBAR_EL1_X0
  	// Diagnostic checkpoint: VBARDON0.
-@@ -1161,6 +1342,10 @@
+@@ -1161,6 +1326,10 @@
  	dsb	sy
  	MSR_SCTLR_EL1_X0
  	isb		sy
