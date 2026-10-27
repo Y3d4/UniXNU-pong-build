@@ -1,6 +1,6 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -308,7 +308,182 @@
+@@ -308,7 +308,181 @@
  	.align 12, 0
  	.global	EXT(LowExceptionVectorBase)
  LEXT(LowExceptionVectorBase)
@@ -179,12 +179,11 @@
 +	wfe
 +	b		4b
 +#endif
-+#else
 +	/* EL1 SP0 */
  	b		.
  	.align	7
  	b		.
-@@ -1110,10 +1285,16 @@
+@@ -1110,10 +1284,16 @@
  
  	cbnz		x21, 1f
  #endif /* __ARM_KERNEL_PROTECT__ */
@@ -201,7 +200,7 @@
  1:
  	MSR_VBAR_EL1_X0
  	// Diagnostic checkpoint: VBARDON0.
-@@ -1161,6 +1342,10 @@
+@@ -1161,6 +1341,10 @@
  	dsb	sy
  	MSR_SCTLR_EL1_X0
  	isb		sy
