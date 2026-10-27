@@ -1,6 +1,6 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -308,7 +308,181 @@
+@@ -308,7 +308,182 @@
  	.align 12, 0
  	.global	EXT(LowExceptionVectorBase)
  LEXT(LowExceptionVectorBase)
@@ -178,32 +178,13 @@
 +4:
 +	wfe
 +	b		4b
++#endif
 +#else
 +	/* EL1 SP0 */
  	b		.
  	.align	7
  	b		.
-@@ -343,18 +517,7 @@
- 	b		.
- 	.align	7
- 	b		.
--#if defined(GENERIC_PSCI_SMP)
--/*
-- * PSCI exception capture for a core other than the boot processor, from its first
-- * instruction (reset_vector) until common_start gives it the kernel's
-- * vectors. The boot loader is not this core's to return to; it leaves a note
-- * of what happened where the processor that is waiting for it looks
-- * (psci_smp_start_cpu()) and switches itself off again.
-- *
-- * VBAR holds a physical address here too, so the note is addressed
-- * physically; the store goes straight to memory when the MMU is still off,
-- * and is sent there when it is not.
-- */
-+#endif
- 	.align	11
- 	.globl EXT(LowSecondaryExceptionVectorBase)
- LEXT(LowSecondaryExceptionVectorBase)
-@@ -1110,10 +1273,16 @@
+@@ -1110,10 +1285,16 @@
  
  	cbnz		x21, 1f
  #endif /* __ARM_KERNEL_PROTECT__ */
@@ -220,7 +201,7 @@
  1:
  	MSR_VBAR_EL1_X0
  	// Diagnostic checkpoint: VBARDON0.
-@@ -1161,6 +1330,10 @@
+@@ -1161,6 +1342,10 @@
  	dsb	sy
  	MSR_SCTLR_EL1_X0
  	isb		sy
