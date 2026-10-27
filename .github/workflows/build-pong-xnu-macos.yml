@@ -28,6 +28,11 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_early_exception:
+        description: Build the v13 low-vector post-MMU exception capture kernel
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -102,8 +107,28 @@ jobs:
       - name: Install build tools
         run: brew install llvm lld mtools dtc unifdef ripgrep
 
+      - name: Check diagnostic selection
+        run: |
+          set -euo pipefail
+          count=0
+          for enabled in \
+            "${{ inputs.diagnostic_v8 }}" \
+            "${{ inputs.diagnostic_v8_trace }}" \
+            "${{ inputs.diagnostic_entry_reset }}" \
+            "${{ inputs.diagnostic_mmu_reset }}" \
+            "${{ inputs.diagnostic_boot_stages }}" \
+            "${{ inputs.diagnostic_early_exception }}"; do
+            if [ "$enabled" = "true" ]; then
+              count=$((count + 1))
+            fi
+          done
+          if [ "$count" -gt 1 ]; then
+            echo 'Select at most one diagnostic mode.' >&2
+            exit 1
+          fi
+
       - name: Check required firmware secret
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true && inputs.diagnostic_early_exception != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -153,7 +178,7 @@ jobs:
           exit 1
 
       - name: Download Pong GPU firmware
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true && inputs.diagnostic_early_exception != true }}
         env:
           FIRMWARE_URL: ${{ secrets.PONG_FIRMWARE_URL }}
           FIRMWARE_SHA256: ${{ secrets.PONG_FIRMWARE_SHA256 }}
@@ -199,7 +224,7 @@ jobs:
             --bootstrap-storage-abi
 
       - name: Build source CoreCrypto archives for v8
-        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true || inputs.diagnostic_entry_reset == true || inputs.diagnostic_mmu_reset == true || inputs.diagnostic_boot_stages == true }}
+        if: ${{ inputs.diagnostic_v8 == true || inputs.diagnostic_v8_trace == true || inputs.diagnostic_entry_reset == true || inputs.diagnostic_mmu_reset == true || inputs.diagnostic_boot_stages == true || inputs.diagnostic_early_exception == true }}
         working-directory: ${{ runner.temp }}/pong-bootstrap/tree
         run: |
           set -euo pipefail
@@ -215,7 +240,7 @@ jobs:
           ls -lh build/corecrypto-2023/libcorecrypto_kernel_noasm*.a
 
       - name: Emit corecrypto ABI candidate
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true && inputs.diagnostic_early_exception != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -228,7 +253,7 @@ jobs:
             --skip-bootimg
 
       - name: Audit iOS 16 storage ABI
-        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true }}
+        if: ${{ inputs.diagnostic_v8 != true && inputs.diagnostic_v8_trace != true && inputs.diagnostic_entry_reset != true && inputs.diagnostic_mmu_reset != true && inputs.diagnostic_boot_stages != true && inputs.diagnostic_early_exception != true }}
         working-directory: unixnu
         run: |
           set -euo pipefail
@@ -258,7 +283,7 @@ jobs:
             --jobs 4
             --artifact-dir "$GITHUB_WORKSPACE/artifact/kernel"
           )
-          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" || "${{ inputs.diagnostic_entry_reset }}" == "true" || "${{ inputs.diagnostic_mmu_reset }}" == "true" || "${{ inputs.diagnostic_boot_stages }}" == "true" ]]; then
+          if [[ "${{ inputs.diagnostic_v8 }}" == "true" || "${{ inputs.diagnostic_v8_trace }}" == "true" || "${{ inputs.diagnostic_entry_reset }}" == "true" || "${{ inputs.diagnostic_mmu_reset }}" == "true" || "${{ inputs.diagnostic_boot_stages }}" == "true" || "${{ inputs.diagnostic_early_exception }}" == "true" ]]; then
             python3 - <<'PY'
           import os
           from pathlib import Path
@@ -278,6 +303,8 @@ jobs:
               changes['CONFIG_XNU_PONG_ENTRY_STAGE=0'] = 'CONFIG_XNU_PONG_ENTRY_STAGE=1'
           if "${{ inputs.diagnostic_boot_stages }}" == "true":
               changes['CONFIG_XNU_PONG_BOOT_STAGES=n'] = 'CONFIG_XNU_PONG_BOOT_STAGES=y'
+          if "${{ inputs.diagnostic_early_exception }}" == "true":
+              changes['CONFIG_XNU_PONG_EARLY_EXCEPTION=n'] = 'CONFIG_XNU_PONG_EARLY_EXCEPTION=y'
           for old, new in changes.items():
               if text.count(old) != 1:
                   raise SystemExit(f"Expected exactly one {old!r} in {path}")
@@ -302,6 +329,10 @@ jobs:
           native_tree="$RUNNER_TEMP/pong-native/tree"
           native_kernel="$native_tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong.unstripped"
           mkdir -p "$GITHUB_WORKSPACE/artifact/symbols"
+          early_exception_dir="$native_tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception"
+          if [ -d "$early_exception_dir" ]; then
+            cp -R "$early_exception_dir" "$GITHUB_WORKSPACE/artifact/symbols/"
+          fi
           if [ -f "$native_kernel" ]; then
             cp "$native_kernel" \
               "$GITHUB_WORKSPACE/artifact/symbols/mach.development.pong.unstripped"

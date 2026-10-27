@@ -1,0 +1,233 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -308,7 +308,181 @@
+ 	.align 12, 0
+ 	.global	EXT(LowExceptionVectorBase)
+ LEXT(LowExceptionVectorBase)
+-	/* EL1 SP 0 */
++#if defined(XNU_PONG_EARLY_EXCEPTION) && XNU_PONG_EARLY_EXCEPTION
++	/*
++	 * Diagnostic-only full ARM64 vector table. Keep the architectural
++	 * 0x800-byte layout and place the stackless recorder at 0x800.
++	 */
++	/* EL1 SP0: synchronous, IRQ, FIQ, SError. */
++	b		EXT(Lekv13_handler)
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	/* EL1 SP1: synchronous, IRQ, FIQ, SError. */
++	.align	7
++	b		EXT(Lekv13_handler)
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	/* EL0 64-bit: all eight slots stay present. */
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	/* EL0 32-bit: all eight slots stay present. */
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++	.align	7
++	b		.
++
++	/* Fixed at 0x800 for the two synchronous entries above. */
++	.align	9
++	.globl	EXT(Lekv13_handler)
++LEXT(Lekv13_handler)
++	msr		DAIFSet, #0xf
++	/* x9 is the physical pmsg base. x9's original value is unrecoverable. */
++	movz	x9, #0x8540, lsl #16
++	/* Save x10 before reusing it, and lazily clear the old x9 slot. */
++	str		x10, [x9, #0xc8]
++	str		wzr, [x9, #0xc0]
++
++	/* Initial Linux persistent-RAM header; size is published last. */
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16		/* DBGC */
++	str		w10, [x9, #0x00]
++	str		wzr, [x9, #0x04]
++	str		wzr, [x9, #0x08]
++
++	/* Fixed marker and architectural exception state. */
++	movz	w10, #0x454b
++	movk	w10, #0x3156, lsl #16		/* KEV1 */
++	str		w10, [x9, #0x0c]
++	movz	w10, #0x5845
++	movk	w10, #0x3030, lsl #16		/* EX00 */
++	str		w10, [x9, #0x10]
++
++	mrs		x10, MPIDR_EL1
++	str		x10, [x9, #0x18]
++	mrs		x10, CurrentEL
++	str		x10, [x9, #0x20]
++	mrs		x10, ESR_EL1
++	str		x10, [x9, #0x28]
++	mrs		x10, FAR_EL1
++	str		x10, [x9, #0x30]
++	mrs		x10, ELR_EL1
++	str		x10, [x9, #0x38]
++	mrs		x10, SPSR_EL1
++	str		x10, [x9, #0x40]
++	mrs		x10, SCTLR_EL1
++	str		x10, [x9, #0x48]
++	mrs		x10, TTBR0_EL1
++	str		x10, [x9, #0x50]
++	mrs		x10, TTBR1_EL1
++	str		x10, [x9, #0x58]
++	mrs		x10, TCR_EL1
++	str		x10, [x9, #0x60]
++	mrs		x10, MAIR_EL1
++	str		x10, [x9, #0x68]
++	mrs		x10, VBAR_EL1
++	str		x10, [x9, #0x70]
++
++	/* x0..x8, then the already-saved original x10. */
++	str		x0, [x9, #0x78]
++	str		x1, [x9, #0x80]
++	str		x2, [x9, #0x88]
++	str		x3, [x9, #0x90]
++	str		x4, [x9, #0x98]
++	str		x5, [x9, #0xa0]
++	str		x6, [x9, #0xa8]
++	str		x7, [x9, #0xb0]
++	str		x8, [x9, #0xb8]
++	/* [x9,#0xc0] was cleared above; [x9,#0xc8] contains old x10. */
++	str		x11, [x9, #0xd0]
++	str		x12, [x9, #0xd8]
++	str		x13, [x9, #0xe0]
++	str		x14, [x9, #0xe8]
++	str		x15, [x9, #0xf0]
++	str		x16, [x9, #0xf8]
++	str		x17, [x9, #0x100]
++	str		x18, [x9, #0x108]
++	str		x19, [x9, #0x110]
++	str		x20, [x9, #0x118]
++	str		x21, [x9, #0x120]
++	str		x22, [x9, #0x128]
++	str		x23, [x9, #0x130]
++	str		x24, [x9, #0x138]
++	str		x25, [x9, #0x140]
++	str		x26, [x9, #0x148]
++	str		x27, [x9, #0x150]
++	str		x28, [x9, #0x158]
++	str		x29, [x9, #0x160]
++	str		x30, [x9, #0x168]
++
++	/* Capture the active stack without leaving SPSel changed. */
++	mrs		x10, SPSel
++	cbz		w10, 1f
++	mrs		x10, SP_EL1
++	str		x10, [x9, #0x180]
++	b		2f
++1:
++	mrs		x10, SP_EL0
++	str		x10, [x9, #0x170]
++2:
++	msr		SPSel, #0
++	mrs		x10, TPIDRRO_EL0
++	str		x10, [x9, #0x178]
++	/* No write to TPIDR_EL0 or TPIDR_EL1. */
++
++	/* Publish payload before the Linux-compatible header size 0x17c. */
++	dsb		sy
++	mov		x10, x9
++	add		x11, x9, #0x200
++3:
++	dc		civac, x10
++	add		x10, x10, #64
++	cmp		x10, x11
++	b.lo		3b
++	dsb		sy
++	movz	w10, #0x017c
++	str		w10, [x9, #0x08]
++	dsb		sy
++	dc		civac, x9
++	dsb		sy
++4:
++	wfe
++	b		4b
++#else
++	/* EL1 SP0 */
+ 	b		.
+ 	.align	7
+ 	b		.
+@@ -343,18 +517,7 @@
+ 	b		.
+ 	.align	7
+ 	b		.
+-#if defined(GENERIC_PSCI_SMP)
+-/*
+- * PSCI exception capture for a core other than the boot processor, from its first
+- * instruction (reset_vector) until common_start gives it the kernel's
+- * vectors. The boot loader is not this core's to return to; it leaves a note
+- * of what happened where the processor that is waiting for it looks
+- * (psci_smp_start_cpu()) and switches itself off again.
+- *
+- * VBAR holds a physical address here too, so the note is addressed
+- * physically; the store goes straight to memory when the MMU is still off,
+- * and is sent there when it is not.
+- */
++#endif
+ 	.align	11
+ 	.globl EXT(LowSecondaryExceptionVectorBase)
+ LEXT(LowSecondaryExceptionVectorBase)
+@@ -1110,10 +1273,16 @@
+ 
+ 	cbnz		x21, 1f
+ #endif /* __ARM_KERNEL_PROTECT__ */
++#if defined(XNU_PONG_EARLY_EXCEPTION) && XNU_PONG_EARLY_EXCEPTION
++	/* Keep the low identity-mapped vectors active until the post-MMU probe. */
++	adrp	x0, EXT(LowExceptionVectorBase)@page
++	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
++#else
+ 	adrp	x0, EXT(ExceptionVectorsBase)@page			// Load exception vectors base address
+ 	add		x0, x0, EXT(ExceptionVectorsBase)@pageoff
+ 	add		x0, x0, x22									// Convert exception vector address to KVA
+ 	sub		x0, x0, x23
++#endif
+ 1:
+ 	MSR_VBAR_EL1_X0
+ 	// Diagnostic checkpoint: VBARDON0.
+@@ -1161,6 +1330,10 @@
+ 	dsb	sy
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
++#if defined(XNU_PONG_EARLY_EXCEPTION) && XNU_PONG_EARLY_EXCEPTION
++	/* Synchronous post-MMU probe: must enter the low SP0 sync vector. */
++	brk		#0x13
++#endif
+ #if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
+ 	// Diagnostic checkpoint: MMUONP00.
+ 	// Stay on the TTBR0 V=P alias. Do not convert through x22/x23 here:

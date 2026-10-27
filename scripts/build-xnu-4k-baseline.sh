@@ -103,7 +103,8 @@ for PATCH in "${PATCHES[@]}"; do
      [[ "$PATCH_NAME" != *pong-xnu-entry-marker.patch ]] &&
      [[ "$PATCH_NAME" != *pong-xnu-entry-stage-reset.patch ]] &&
      [[ "$PATCH_NAME" != *pong-xnu-boot-stages.patch ]] &&
-     [[ "$PATCH_NAME" != *pong-xnu-v12-checkpoints.patch ]]; then
+     [[ "$PATCH_NAME" != *pong-xnu-v12-checkpoints.patch ]] &&
+     [[ "$PATCH_NAME" != *pong-xnu-v13-early-exception.patch ]]; then
     echo "Skipping $PATCH_NAME: storage ABI bootstrap does not need late Pong userland patches"
     continue
   fi
@@ -729,8 +730,14 @@ if [ "$PONG_BOOT_STAGES" != 0 ] && [ "$PONG_BOOT_STAGES" != 1 ]; then
   exit 1
 fi
 diagnostics_enabled=$((PONG_ENTRY_RESET + PONG_ENTRY_STAGE + PONG_BOOT_STAGES))
+PONG_EARLY_EXCEPTION=${XNU_PONG_EARLY_EXCEPTION:-0}
+if [ "$PONG_EARLY_EXCEPTION" != 0 ] && [ "$PONG_EARLY_EXCEPTION" != 1 ]; then
+  echo 'XNU_PONG_EARLY_EXCEPTION must be 0 or 1' >&2
+  exit 1
+fi
+diagnostics_enabled=$((PONG_ENTRY_RESET + PONG_ENTRY_STAGE + PONG_BOOT_STAGES + PONG_EARLY_EXCEPTION))
 if [ "$diagnostics_enabled" -gt 1 ]; then
-  echo 'XNU_PONG_ENTRY_RESET, XNU_PONG_ENTRY_STAGE and XNU_PONG_BOOT_STAGES are mutually exclusive diagnostics' >&2
+  echo 'XNU_PONG_EARLY_EXCEPTION, XNU_PONG_ENTRY_RESET, XNU_PONG_ENTRY_STAGE and XNU_PONG_BOOT_STAGES are mutually exclusive diagnostics' >&2
   exit 1
 fi
 PONG_RAMOOPS_CONSOLE=${XNU_PONG_RAMOOPS_CONSOLE:-0}
@@ -740,7 +747,7 @@ if [ "$PONG_RAMOOPS_CONSOLE" != 0 ] && [ "$PONG_RAMOOPS_CONSOLE" != 1 ]; then
 fi
 # The minimal ramoops mirror is independent of the removed framebuffer and
 # exception-vector tracing hooks.
-EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER -DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE -DXNU_PONG_ENTRY_RESET=$PONG_ENTRY_RESET -DXNU_PONG_ENTRY_STAGE=$PONG_ENTRY_STAGE -DXNU_PONG_BOOT_STAGES=$PONG_BOOT_STAGES")
+EXTRA_MAKE_ARGS+=("start.o_SFLAGS_ADD=-DXNU_NATIVE_ARCH_TIMER=$NATIVE_ARCH_TIMER -DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE -DXNU_PONG_ENTRY_RESET=$PONG_ENTRY_RESET -DXNU_PONG_ENTRY_STAGE=$PONG_ENTRY_STAGE -DXNU_PONG_BOOT_STAGES=$PONG_BOOT_STAGES -DXNU_PONG_EARLY_EXCEPTION=$PONG_EARLY_EXCEPTION")
 EXTRA_MAKE_ARGS+=("arm_init.o_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE -DXNU_PONG_RAMOOPS_CONSOLE=$PONG_RAMOOPS_CONSOLE -mstrict-align -mgeneral-regs-only -march=armv8.1-a")
 EXTRA_MAKE_ARGS+=("arm_vm_init.o_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE")
 EXTRA_MAKE_ARGS+=("machine_routines.o_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE")
@@ -750,12 +757,12 @@ EXTRA_MAKE_ARGS+=("counter_test.o_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_
 EXTRA_MAKE_ARGS+=("IOStartIOKit.cpo_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE")
 EXTRA_MAKE_ARGS+=("OSRuntime.cpo_CFLAGS_ADD=-DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE")
 EXTRA_MAKE_ARGS+=("pe_init.o_CFLAGS_ADD=-DXNU_DT_PANIC_REGION=$DT_PANIC_REGION -DXNU_PONG_VOLATILE_PANIC_LOG=$PONG_VOLATILE_PANIC_LOG -DXNU_PONG_EARLY_TRACE=$PONG_EARLY_TRACE")
-python3 - "$PONG_EARLY_TRACE" "$PONG_RAMOOPS_CONSOLE" "$PONG_ENTRY_RESET" "$PONG_ENTRY_STAGE" "$PONG_BOOT_STAGES" <<'PY_TRACE_MODE'
+python3 - "$PONG_EARLY_TRACE" "$PONG_RAMOOPS_CONSOLE" "$PONG_ENTRY_RESET" "$PONG_ENTRY_STAGE" "$PONG_BOOT_STAGES" "$PONG_EARLY_EXCEPTION" <<'PY_TRACE_MODE'
 from pathlib import Path
 import sys
 directory = Path('build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG')
 stamp = directory / '.pong-early-trace-mode'
-mode = sys.argv[1] + ':' + sys.argv[2] + ':' + sys.argv[3] + ':' + sys.argv[4] + ':' + sys.argv[5] + ':boot-stages-v1'
+mode = sys.argv[1] + ':' + sys.argv[2] + ':' + sys.argv[3] + ':' + sys.argv[4] + ':' + sys.argv[5] + ':' + sys.argv[6] + ':early-exception-v1'
 if not stamp.exists() or stamp.read_text() != mode:
     for name in ('start', 'arm_init', 'arm_vm_init', 'machine_routines', 'startup', 'serial_console', 'debug'):
         (directory / 'osfmk/DEVELOPMENT' / (name + '.o')).unlink(missing_ok=True)
@@ -1120,6 +1127,211 @@ make -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}" SDKROOT="${XNU_SDKROOT:-iph
   BUILD_LTO=0 BOUND_CHECKS=0 BUILD_WERROR="${XNU_BUILD_WERROR:-0}" MAKEJOBS=-j"${JOBS:-4}" \
   RC_NONARCH_CFLAGS="$EXTRA_CFLAGS" "${EXTRA_MAKE_ARGS[@]}" \
   OBJROOT="$ROOT/build/xnu/ios-obj" SYMROOT="$ROOT/build/xnu/ios-sym" DSTROOT="$ROOT/build/xnu/ios-dst"
+if [ "$PONG_EARLY_EXCEPTION" = 1 ]; then
+  start_object=build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/osfmk/DEVELOPMENT/start.o
+  relocation_report=build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception/start.relocations.txt
+  test -s "$start_object"
+  mkdir -p "$(dirname "$relocation_report")"
+  python3 - "$start_object" "$relocation_report" <<'PY_EARLY_EXCEPTION_OBJECT'
+import struct
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+report_path = Path(sys.argv[2])
+expected = {
+    '_LowExceptionVectorBase': 0x000,
+    '_Lekv13_handler': 0x800,
+    '_LowSecondaryExceptionVectorBase': 0x1000,
+}
+data = path.read_bytes()
+if len(data) < 32 or data[:4] != b'\xcf\xfa\xed\xfe':
+    raise SystemExit('start.o is not a 64-bit little-endian Mach-O')
+cpu_type, _, file_type, ncmds, sizeofcmds, _ = struct.unpack_from('<IIIIII', data, 4)
+if cpu_type != 0x0100000c or file_type != 1:
+    raise SystemExit(f'unexpected Mach-O header: cpu={cpu_type:#x}, file={file_type}')
+if sizeofcmds > len(data) - 32:
+    raise SystemExit('truncated Mach-O load-command area')
+offset = 32
+text_section = None
+symtab = None
+for _ in range(ncmds):
+    if offset + 8 > len(data):
+        raise SystemExit('truncated Mach-O load command')
+    cmd, cmdsize = struct.unpack_from('<II', data, offset)
+    if cmdsize < 8 or offset + cmdsize > len(data):
+        raise SystemExit('malformed Mach-O load command')
+    if cmd == 0x19:
+        if cmdsize < 72:
+            raise SystemExit('truncated Mach-O segment command')
+        nsects = struct.unpack_from('<I', data, offset + 64)[0]
+        if 72 + nsects * 80 > cmdsize:
+            raise SystemExit('Mach-O segment has an invalid section count')
+        section_offset = offset + 72
+        for _ in range(nsects):
+            section = data[section_offset:section_offset + 80]
+            if len(section) != 80:
+                raise SystemExit('truncated Mach-O section')
+            sectname = section[:16].split(b'\0', 1)[0]
+            segname = section[16:32].split(b'\0', 1)[0]
+            address, size = struct.unpack_from('<QQ', section, 32)
+            file_offset = struct.unpack_from('<I', section, 48)[0]
+            relocation_offset, relocation_count = struct.unpack_from('<II', section, 56)
+            if sectname == b'__text' and segname == b'__TEXT':
+                if text_section is not None:
+                    raise SystemExit('start.o has multiple __TEXT,__text sections')
+                text_section = (address, size, file_offset, relocation_offset, relocation_count)
+            section_offset += 80
+    elif cmd == 0x2:
+        if cmdsize < 24:
+            raise SystemExit('truncated Mach-O symtab command')
+        symtab = struct.unpack_from('<IIII', data, offset + 8)
+    offset += cmdsize
+if offset != 32 + sizeofcmds:
+    raise SystemExit('Mach-O load commands do not match sizeofcmds')
+if text_section is None:
+    raise SystemExit('start.o has no __TEXT,__text section')
+if symtab is None:
+    raise SystemExit('start.o has no Mach-O symbol table')
+
+text_address, text_size, text_file_offset, relocation_offset, relocation_count = text_section
+if text_size % 4 or text_file_offset + text_size > len(data):
+    raise SystemExit('invalid Mach-O __text section')
+chunk = data[text_file_offset:text_file_offset + text_size]
+words = {index: struct.unpack_from('<I', chunk, index)[0] for index in range(0, text_size, 4)}
+
+symoff, nsyms, stroff, strsize = symtab
+if symoff + nsyms * 16 > len(data) or stroff + strsize > len(data):
+    raise SystemExit('truncated Mach-O symbol or string table')
+strings = data[stroff:stroff + strsize]
+mach_symbols = {}
+for index in range(nsyms):
+    string_index, _, _, _, value = struct.unpack_from('<IBBHQ', data, symoff + index * 16)
+    if string_index >= len(strings):
+        raise SystemExit('invalid Mach-O symbol string index')
+    name = strings[string_index:].split(b'\0', 1)[0].decode('ascii')
+    mach_symbols[name] = value
+for name, address in expected.items():
+    if mach_symbols.get(name) != address:
+        raise SystemExit(f'unexpected Mach-O symbol {name}: '
+                         f'mach={mach_symbols.get(name)!r}, expected={address:#x}')
+symbols = {name: mach_symbols[name] for name in expected}
+
+if text_address + text_size < 0x1000:
+    raise SystemExit('Mach-O __text section is shorter than the low vectors')
+if relocation_offset + relocation_count * 8 > len(data):
+    raise SystemExit('truncated Mach-O relocation table')
+relocations = {}
+for index in range(relocation_count):
+    entry_offset = relocation_offset + index * 8
+    address = struct.unpack_from('<i', data, entry_offset)[0]
+    info = struct.unpack_from('<I', data, entry_offset + 4)[0]
+    symbol_index = info & 0xffffff
+    pcrel = (info >> 24) & 1
+    length = (info >> 25) & 3
+    external = (info >> 27) & 1
+    relocation_type = (info >> 28) & 0xf
+    if external:
+        if symbol_index >= nsyms:
+            raise SystemExit('Mach-O relocation has an invalid symbol index')
+        string_index = struct.unpack_from('<I', data, symoff + symbol_index * 16)[0]
+        if string_index >= len(strings):
+            raise SystemExit('invalid Mach-O relocation symbol string index')
+        target = strings[string_index:].split(b'\0', 1)[0].decode('ascii')
+    else:
+        target = f'section:{symbol_index}'
+    relocation = (relocation_type, pcrel, length, external, target)
+    if address in relocations:
+        raise SystemExit(f'duplicate Mach-O relocation at {address:#x}')
+    relocations[address] = relocation
+
+base = expected['_LowExceptionVectorBase']
+if text_address != base:
+    raise SystemExit(f'unexpected Mach-O __text address: {text_address:#x}')
+
+def branch_target(word, address):
+    if word & 0xfc000000 != 0x14000000:
+        return None
+    displacement = word & 0x03ffffff
+    if displacement & 0x02000000:
+        displacement -= 0x04000000
+    return address + displacement * 4
+
+required_offsets = [slot * 0x80 for slot in range(16)] + list(range(0x800, 0x1000, 4))
+missing = [offset for offset in required_offsets if offset >= text_size or offset not in words]
+if missing:
+    raise SystemExit(f'early-exception code is missing Mach-O offsets: {missing[:8]!r}')
+
+branch_relocation = (2, 1, 2, 1, '_Lekv13_handler')
+handler_address = expected['_Lekv13_handler']
+for slot in (0, 4):
+    address = slot * 0x80
+    relocation = relocations.get(address - base)
+    if relocation is None:
+        actual_target = branch_target(words[address], address)
+        if actual_target != handler_address:
+            raise SystemExit(f'vector slot {address:#x} resolved branch target is '
+                             f'{actual_target!r}, expected {handler_address:#x}')
+    else:
+        if words[address] != 0x14000000 or relocation != branch_relocation:
+            raise SystemExit(f'bad unresolved branch at {address:#x}: '
+                             f'word={words[address]:#x}, relocation={relocation!r}')
+for slot in range(16):
+    if slot in (0, 4):
+        continue
+    address = slot * 0x80
+    if words[address] != 0x14000000:
+        raise SystemExit(f'vector slot {address:#x} is not b .')
+    if address - base in relocations:
+        raise SystemExit(f'vector slot {address:#x} unexpectedly has a relocation')
+
+handler_words = [words[offset] for offset in range(0x800, 0x1000, 4)]
+for offset, word in zip(range(0x800, 0x1000, 4), handler_words):
+    if word & 0xfc000000 == 0x94000000:
+        raise SystemExit(f'handler contains BL at {offset:#x}')
+    if word & 0x3a000000 == 0x28000000:
+        operation = 'LDP' if word & 0x00400000 else 'STP'
+        raise SystemExit(f'handler contains {operation} at {offset:#x}')
+    if word == 0xd65f03c0:
+        raise SystemExit(f'handler contains RET at {offset:#x}')
+    # TPIDR_EL0 encodes as 0xd51bd04X and TPIDR_EL1 as 0xd518d08X.
+    if word & 0xfffffff0 in (0xd51bd040, 0xd518d080):
+        raise SystemExit(f'handler writes TPIDR_EL0/EL1 at {offset:#x}')
+    # The only allowed exception handler maintenance is DC CIVAC. DC IVAC
+    # shares op1=0 rather than op1=3, so reject it explicitly first.
+    if word & 0xffffffe0 == 0xd5087620:
+        raise SystemExit(f'handler contains DC IVAC at {offset:#x}')
+    # Decode the remaining SYS fields directly: op0=1, op1=3, CRn=7.
+    # Within the data-cache namespace, only CRm=14/op2=1 (CIVAC) is allowed.
+    if word & 0xfff80000 == 0xd5080000:
+        op1 = (word >> 16) & 0x7
+        crn = (word >> 12) & 0xf
+        crm = (word >> 8) & 0xf
+        op2 = (word >> 5) & 0x7
+        if op1 == 3 and crn == 7 and (crm, op2) != (14, 1):
+            raise SystemExit(f'handler contains a non-civac data-cache operation at {offset:#x}')
+
+report = [
+    f'object: {path}',
+    f'__text address: {text_address:#x}',
+    f'__text size: {text_size:#x}',
+    'symbols:',
+]
+for name, address in symbols.items():
+    report.append(f'  {name} = {address:#x}')
+report.append('text relocations:')
+for address in sorted(relocations):
+    relocation_type, pcrel, length, external, target = relocations[address]
+    report.append(f'  {address:#x}: type={relocation_type} pcrel={pcrel} '
+                  f'length={length} external={external} target={target}')
+report_path.write_text('\n'.join(report) + '\n')
+print(f'early-exception object layout OK: {symbols}; branch relocations verified')
+PY_EARLY_EXCEPTION_OBJECT
+  cp "$start_object" build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception/start.o
+  xcrun nm -nm "$start_object" > build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception/start.nm.txt || true
+  xcrun otool -tvV "$start_object" > build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception/start.otool.txt || true
+  xcrun otool -rvV "$start_object" > build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/early-exception/start.otool-relocations.txt || true
+fi
 if [ "${XNU_SOURCE_CORECRYPTO14:-0}" = 1 ] && [ "$CRYPTO_BOOTSTRAP_MODE" = source ]; then
   for kernel in \
     build/xnu/ios-obj/DEVELOPMENT_ARM64_PONG/mach.development.pong.unstripped \

@@ -33,6 +33,8 @@ def main():
     parser.add_argument('--fat-mib', type=int, default=32)
     parser.add_argument('--window-size', type=lambda value: int(value, 0), default=0x10000000,
                         help='RAM bytes for DarwinBoot to allocate from real UEFI conventional memory')
+    parser.add_argument('--menu-timeout', type=int, default=3,
+                        help='UniXNU menu timeout in seconds; use 0 to boot the default entry immediately')
     parser.add_argument('--kernel-arg', action='append', default=[])
     parser.add_argument('--verbose-console', action='store_true',
                         help='opt in to -v screen text; default keeps the graphical boot path')
@@ -48,6 +50,8 @@ def main():
     parser.add_argument('--skip-image-verification', action='store_true',
                         help='package without image hashes, comparisons or output audits')
     args = parser.parse_args()
+    if args.menu_timeout < 0:
+        parser.error('--menu-timeout must be non-negative')
     if not 0x10000000 <= args.window_size <= 0x200000000 or args.window_size % 0x200000:
         parser.error('--window-size must be 256 MiB..8 GiB, aligned to 2 MiB')
     if args.packed_data_ramdisk != (args.data_ramdisk is not None):
@@ -139,7 +143,7 @@ def main():
                  audit_adt((payload / 'kernel.macho.adt').read_bytes(), boot_manifest=boot_manifest))
     (out / 'adt-audit.json').write_text(json.dumps(adt_audit, indent=2) + '\n')
     initrd_line = 'initrd = "Payloads/scratch-data.img"\n' if data_ramdisk else ''
-    (payload / 'unixnu.toml').write_text('version = 1\n[boot]\ntimeout = 3\n'
+    (payload / 'unixnu.toml').write_text(f'version = 1\n[boot]\ntimeout = {args.menu_timeout}\n'
         'default = "pong-xnu"\n[kits]\nautoload = false\n[[driver]]\n'
         'path = "DarwinBoot22.efi"\nconnect = false\n[[entry]]\n'
         'id = "pong-xnu"\ntitle = "Pong iOS 16 native XNU initial bring-up"\n'
