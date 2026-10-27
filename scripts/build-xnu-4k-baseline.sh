@@ -1139,11 +1139,11 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 report_path = Path(sys.argv[2])
-expected = {
-    '_LowExceptionVectorBase': 0x000,
-    '_Lekv13_handler': 0x800,
-    '_LowSecondaryExceptionVectorBase': 0x1000,
-}
+symbol_names = (
+    '_LowExceptionVectorBase',
+    '_Lekv13_handler',
+    '_LowSecondaryExceptionVectorBase',
+)
 data = path.read_bytes()
 if len(data) < 32 or data[:4] != b'\xcf\xfa\xed\xfe':
     raise SystemExit('start.o is not a 64-bit little-endian Mach-O')
@@ -1211,14 +1211,24 @@ for index in range(nsyms):
         raise SystemExit('invalid Mach-O symbol string index')
     name = strings[string_index:].split(b'\0', 1)[0].decode('ascii')
     mach_symbols[name] = value
-for name, address in expected.items():
-    if mach_symbols.get(name) != address:
-        raise SystemExit(f'unexpected Mach-O symbol {name}: '
-                         f'mach={mach_symbols.get(name)!r}, expected={address:#x}')
-symbols = {name: mach_symbols[name] for name in expected}
-
-if text_address + text_size < 0x1000:
-    raise SystemExit('Mach-O __text section is shorter than the low vectors')
+missing_symbols = [name for name in symbol_names if name not in mach_symbols]
+if missing_symbols:
+    raise SystemExit(f'Mach-O object is missing symbols: {missing_symbols!r}')
+symbols = {name: mach_symbols[name] for name in symbol_names}
+base = symbols['_LowExceptionVectorBase']
+handler_address = symbols['_Lekv13_handler']
+secondary_base = symbols['_LowSecondaryExceptionVectorBase']
+vector_size = secondary_base - base
+if vector_size != 0x1000:
+    raise SystemExit(f'unexpected low-vector span: {vector_size:#x}')
+if handler_address != base + 0x800:
+    raise SystemExit(f'unexpected v13 handler address: {handler_address:#x}, '
+                     f'expected={base + 0x800:#x}')
+vector_offset = base - text_address
+if vector_offset < 0 or vector_offset + vector_size > text_size:
+    raise SystemExit(f'Mach-O __text does not cover the low vectors: '
+                     f'text={text_address:#x}+{text_size:#x}, '
+                     f'vectors={base:#x}+{vector_size:#x}')
 if relocation_offset + relocation_count * 8 > len(data):
     raise SystemExit('truncated Mach-O relocation table')
 relocations = {}
@@ -1245,10 +1255,6 @@ for index in range(relocation_count):
         raise SystemExit(f'duplicate Mach-O relocation at {address:#x}')
     relocations[address] = relocation
 
-base = expected['_LowExceptionVectorBase']
-if text_address != base:
-    raise SystemExit(f'unexpected Mach-O __text address: {text_address:#x}')
-
 def branch_target(word, address):
     if word & 0xfc000000 != 0x14000000:
         return None
@@ -1257,35 +1263,37 @@ def branch_target(word, address):
         displacement -= 0x04000000
     return address + displacement * 4
 
-required_offsets = [slot * 0x80 for slot in range(16)] + list(range(0x800, 0x1000, 4))
+required_offsets = ([vector_offset + slot * 0x80 for slot in range(16)] +
+                    list(range(vector_offset + 0x800, vector_offset + 0x1000, 4)))
 missing = [offset for offset in required_offsets if offset >= text_size or offset not in words]
 if missing:
     raise SystemExit(f'early-exception code is missing Mach-O offsets: {missing[:8]!r}')
 
 branch_relocation = (2, 1, 2, 1, '_Lekv13_handler')
-handler_address = expected['_Lekv13_handler']
 for slot in (0, 4):
-    address = slot * 0x80
-    relocation = relocations.get(address - base)
+    vector_address = base + slot * 0x80
+    object_offset = vector_offset + slot * 0x80
+    relocation = relocations.get(object_offset)
     if relocation is None:
-        actual_target = branch_target(words[address], address)
+        actual_target = branch_target(words[object_offset], text_address + object_offset)
         if actual_target != handler_address:
-            raise SystemExit(f'vector slot {address:#x} resolved branch target is '
+            raise SystemExit(f'vector slot {vector_address:#x} resolved branch target is '
                              f'{actual_target!r}, expected {handler_address:#x}')
     else:
-        if words[address] != 0x14000000 or relocation != branch_relocation:
-            raise SystemExit(f'bad unresolved branch at {address:#x}: '
-                             f'word={words[address]:#x}, relocation={relocation!r}')
+        if words[object_offset] != 0x14000000 or relocation != branch_relocation:
+            raise SystemExit(f'bad unresolved branch at {vector_address:#x}: '
+                             f'word={words[object_offset]:#x}, relocation={relocation!r}')
 for slot in range(16):
     if slot in (0, 4):
         continue
-    address = slot * 0x80
-    if words[address] != 0x14000000:
-        raise SystemExit(f'vector slot {address:#x} is not b .')
-    if address - base in relocations:
-        raise SystemExit(f'vector slot {address:#x} unexpectedly has a relocation')
+    vector_address = base + slot * 0x80
+    object_offset = vector_offset + slot * 0x80
+    if words[object_offset] != 0x14000000:
+        raise SystemExit(f'vector slot {vector_address:#x} is not b .')
+    if object_offset in relocations:
+        raise SystemExit(f'vector slot {vector_address:#x} unexpectedly has a relocation')
 
-handler_words = [words[offset] for offset in range(0x800, 0x1000, 4)]
+handler_words = [words[vector_offset + offset] for offset in range(0x800, 0x1000, 4)]
 for offset, word in zip(range(0x800, 0x1000, 4), handler_words):
     if word & 0xfc000000 == 0x94000000:
         raise SystemExit(f'handler contains BL at {offset:#x}')
@@ -1315,6 +1323,8 @@ report = [
     f'object: {path}',
     f'__text address: {text_address:#x}',
     f'__text size: {text_size:#x}',
+    f'vector offset: {vector_offset:#x}',
+    f'vector size: {vector_size:#x}',
     'symbols:',
 ]
 for name, address in symbols.items():
