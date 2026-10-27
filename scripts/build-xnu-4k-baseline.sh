@@ -102,7 +102,8 @@ for PATCH in "${PATCHES[@]}"; do
      [[ "$PATCH_NAME" != *pong-early-trace.patch ]] &&
      [[ "$PATCH_NAME" != *pong-xnu-entry-marker.patch ]] &&
      [[ "$PATCH_NAME" != *pong-xnu-entry-stage-reset.patch ]] &&
-     [[ "$PATCH_NAME" != *pong-xnu-boot-stages.patch ]]; then
+     [[ "$PATCH_NAME" != *pong-xnu-boot-stages.patch ]] &&
+     [[ "$PATCH_NAME" != *pong-xnu-v12-checkpoints.patch ]]; then
     echo "Skipping $PATCH_NAME: storage ABI bootstrap does not need late Pong userland patches"
     continue
   fi
@@ -150,6 +151,16 @@ for PATCH in "${PATCHES[@]}"; do
     exit 1
   fi
 done
+if [ "${XNU_STORAGE_ABI_BOOTSTRAP:-0}" = 1 ] && [ "${XNU_PONG_BOOT_STAGES:-0}" = 1 ]; then
+  checkpoint_source=.cache/xnu-work/osfmk/arm64/start.s
+  for marker in NEXENT00 NEXDON00 TCRDON00 TTBPRE00 TTB0DO00 TTB1DO00 \
+                MAIRDO00 VBARDON0 SCTLRPR0 MMUONP00 SCTLOK00 SCTLFAIL ARMINIT0; do
+    if ! rg -q "Diagnostic checkpoint: $marker" "$checkpoint_source"; then
+      echo "Boot-stage checkpoint $marker is missing after patch application" >&2
+      exit 1
+    fi
+  done
+fi
 python3 - <<'PY_PATCH_TIMES'
 from pathlib import Path
 import hashlib, json, os
