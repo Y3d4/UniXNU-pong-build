@@ -192,14 +192,49 @@
  1:
  	MSR_VBAR_EL1_X0
  	// Diagnostic checkpoint: VBARDON0.
-@@ -1161,6 +1326,10 @@
+@@ -1161,7 +1326,45 @@
  	dsb	sy
++#if defined(XNU_PONG_EARLY_EXCEPTION) && XNU_PONG_EARLY_EXCEPTION
++	/* Last pre-MMU checkpoint: SCTLR write about to execute. */
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16		/* DBGC */
++	str		w10, [x9, #0x00]
++	str		wzr, [x9, #0x04]
++	movz	w10, #8
++	str		w10, [x9, #0x08]
++	movz	w10, #0x5250
++	movk	w10, #0x5345, lsl #16		/* PRES */
++	str		w10, [x9, #0x0c]
++	movz	w10, #0x5443
++	movk	w10, #0x3030, lsl #16		/* CT00 => PRESCT00 */
++	str		w10, [x9, #0x10]
++	dc		civac, x9
++	dsb		sy
++#endif
  	MSR_SCTLR_EL1_X0
  	isb		sy
 +#if defined(XNU_PONG_EARLY_EXCEPTION) && XNU_PONG_EARLY_EXCEPTION
++	/* First post-MMU physical-alias probe: POSTSCT0. */
++	movz	x9, #0x8540, lsl #16
++	movz	w10, #0x4244
++	movk	w10, #0x4347, lsl #16		/* DBGC */
++	str		w10, [x9, #0x00]
++	str		wzr, [x9, #0x04]
++	movz	w10, #8
++	str		w10, [x9, #0x08]
++	movz	w10, #0x4f50
++	movk	w10, #0x5453, lsl #16		/* POST */
++	str		w10, [x9, #0x0c]
++	movz	w10, #0x4353
++	movk	w10, #0x3054, lsl #16		/* SCT0 => POSTSCT0 */
++	str		w10, [x9, #0x10]
++	dc		civac, x9
++	dsb		sy
 +	/* Synchronous post-MMU probe: must enter the low SP0 sync vector. */
 +	brk		#0x13
 +#endif
  #if defined(XNU_PONG_BOOT_STAGES) && XNU_PONG_BOOT_STAGES
  	// Diagnostic checkpoint: MMUONP00.
  	// Stay on the TTBR0 V=P alias. Do not convert through x22/x23 here:
+ 	// this first probe must not depend on a successful KVA translation.
